@@ -16,7 +16,7 @@
 
 apiVersion: v1alpha1
 name: spark-rbac
-tag: 1.0.1-p01
+tag: 1.0.1-cnx01
 protected: false
 description: |
   Helm chart that provisions the Kubernetes ServiceAccount and RBAC resources
@@ -25,6 +25,13 @@ usage:
   text: |
     Helm chart that provisions the Kubernetes ServiceAccount and RBAC resources
     (Role and RoleBinding) required to run Apache Spark on Kubernetes.
+schema:
+  parameters:
+    properties:
+      rbacCreate: { type: boolean, default: true }
+      serviceAccountCreate: { type: boolean, default: true }
+      serviceAccountName: { type: string, default: spark }
+      automountServiceAccountToken: { type: boolean, default: true }
 modules:
   - name: main
     timeout: 10m
@@ -34,11 +41,11 @@ modules:
         tag: 1.0.1
     values: |
       rbac:
-        create: {{ .Context.spark.rbac.rbac.create }}
+        create: {{ .Parameters.rbacCreate }}
       serviceAccount:
-        create: {{ .Context.spark.rbac.serviceAccount.create }}
-        name: "{{ .Context.spark.rbac.serviceAccount.name }}"
-        automountServiceAccountToken: {{ .Context.spark.rbac.serviceAccount.automountServiceAccountToken }}
+        create: {{ .Parameters.serviceAccountCreate }}
+        name: "{{ .Parameters.serviceAccountName }}"
+        automountServiceAccountToken: {{ .Parameters.automountServiceAccountToken }}
 
 roles:
   - spark-rbac
