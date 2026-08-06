@@ -1,6 +1,10 @@
+# Connections wiring: consumes db (interface database-server) as a connectionRef
+# parameter gating the metadata database, the chart reads the assembled connection
+# string Secret named by the metadataSecret parameter. OIDC comes from the platform
+# connection platform.connections.oidc, the OAuth client secret is a parameter.
 apiVersion: v1alpha1
 name: airflow
-tag: 3.2.1-p2
+tag: 3.2.1-cnx01
 protected: false
 description: |
   Apache Airflow 2.9.3 - Workflow orchestration platform with Spark Operator integration
@@ -11,7 +15,7 @@ usage:
     Pods, ingress, and certificate provisioning may still take a few minutes.
 
     Access the Airflow UI:
-      URL: {{ .Context.airflow.endpoint.url | replace "{{ .Release.namespace }}" .Release.spec.targetNamespace | replace "{{ .Release.metadata.name }}" .Release.metadata.name | replace "{{ .Context.ingress.suffix }}" .Context.platform.ingress.suffix }}
+      URL: https://airflow-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
       Authenticate via the configured OIDC provider.
 
 schema:
@@ -30,6 +34,20 @@ schema:
             required: true
             properties:
               suffix: { type: string, required: true }
+          connections:
+            properties:
+              oidc: { type: connectionRef, interface: oidc, required: true }
+  parameters:
+    properties:
+      db: { type: connectionRef, interface: database-server, required: true, description: "Connection to the SQL database server hosting the Airflow metadata database." }
+      metadataSecret: { type: string, required: true, description: "Secret with key connection holding the full SQLAlchemy connection string." }
+      securitySecretRef: { type: string, required: true, description: "Secret holding the api secret key, JWT secret and fernet key." }
+      oidcEnabled: { type: boolean, default: false, description: "Enable OIDC authentication on the Airflow UI." }
+      oidcClientSecretRef: { type: string, description: "Secret with keys client_id/client_secret, this instance's own OAuth client." }
+      oidcScope: { type: string, default: "openid+profile+email+offline_access+groups", description: "OAuth scopes requested at login (plus signs are turned into spaces)." }
+      oidcRoleMapping: { type: object, properties: {}, additionalProperties: true, description: "Map of OIDC groups to lists of Airflow roles." }
+      oidcInsecureSkipVerify: { type: boolean, default: false, description: "Skip TLS verification against the OIDC provider." }
+      dagsGitSync: { type: object, properties: {}, additionalProperties: true, description: "Chart dags.gitSync values, credentialsSecret.name carries the git credentials Secret name." }
 
 modules:
   - name: main
@@ -41,46 +59,28 @@ modules:
         version: 1.21.0
     values: |
       executor: KubernetesExecutor
-      
+
       defaultAirflowTag: "3.2.1"
       airflowVersion: "3.2.1"
-      
+
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
       {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
-      {{- $airflowUrl := .Context.airflow.endpoint.url
-            | replace "{{ .Release.namespace }}" $namespace
-            | replace "{{ .Release.metadata.name }}" $release
-            | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      {{- $airflowHost := regexReplaceAll "^https?://" $airflowUrl "" -}}
-      {{- $airflowGitSync := .Context.airflow.dags.gitSync | default dict }}
+      {{- $airflowHost := printf "airflow-%s.%s" $namespace $domain -}}
+      {{- $airflowGitSync := .Parameters.dagsGitSync | default dict }}
       {{- $airflowGitSyncValues := omit $airflowGitSync "credentialsSecret" }}
-      {{- $airflowOidc := .Context.airflow.oidc | default dict }}
-      {{- $airflowOidcEnabled := $airflowOidc.enabled | default false }}
-      {{- $airflowOidcRoleMapping := $airflowOidc.roleMapping | default dict }}
+      {{- $airflowOidcEnabled := .Parameters.oidcEnabled }}
+      {{- $airflowOidcRoleMapping := .Parameters.oidcRoleMapping | default dict }}
       {{- $airflowOidcBaseUrl := "" }}
       {{- $airflowOidcAuthUrl := "" }}
       {{- $airflowOidcTokenUrl := "" }}
       {{- $airflowOidcIssuerUri := "" }}
       {{- if $airflowOidcEnabled }}
-        {{- $oidcId := required "context.airflow.oidc.provider is required when Airflow OIDC is enabled" $airflowOidc.provider -}}
-        {{- $oidcProvider := (index .Context $oidcId).provider -}}
-        {{- $airflowOidcBaseUrl = (required "context airflow OIDC provider baseUri is required" $oidcProvider.baseUri)
-              | replace "{{ .Release.namespace }}" $namespace
-              | replace "{{ .Release.metadata.name }}" $release
-              | replace "{{ .Context.ingress.suffix }}" $domain -}}
-        {{- $airflowOidcAuthUrl = (required "context airflow OIDC provider authUrl is required" $oidcProvider.endpoints.authUrl)
-              | replace "{{ .Release.namespace }}" $namespace
-              | replace "{{ .Release.metadata.name }}" $release
-              | replace "{{ .Context.ingress.suffix }}" $domain -}}
-        {{- $airflowOidcTokenUrl = (required "context airflow OIDC provider tokenUrl is required" $oidcProvider.endpoints.tokenUrl)
-              | replace "{{ .Release.namespace }}" $namespace
-              | replace "{{ .Release.metadata.name }}" $release
-              | replace "{{ .Context.ingress.suffix }}" $domain -}}
-        {{- $airflowOidcIssuerUri = (required "context airflow OIDC provider issuerUri is required" $oidcProvider.issuerUri)
-              | replace "{{ .Release.namespace }}" $namespace
-              | replace "{{ .Release.metadata.name }}" $release
-              | replace "{{ .Context.ingress.suffix }}" $domain -}}
+        {{- $oidc := .Context.platform.connections.oidc -}}
+        {{- $airflowOidcBaseUrl = printf "%s/protocol/openid-connect" $oidc.issuerUri -}}
+        {{- $airflowOidcAuthUrl = $oidc.authUrl -}}
+        {{- $airflowOidcTokenUrl = $oidc.tokenUrl -}}
+        {{- $airflowOidcIssuerUri = $oidc.issuerUri -}}
       {{- end }}
 
       extraEnv: |
@@ -88,13 +88,13 @@ modules:
         - name: AIRFLOW_OIDC_CLIENT_ID
           valueFrom:
             secretKeyRef:
-              name: {{ $airflowOidc.credentialsSecret.name }}
-              key: {{ $airflowOidc.credentialsSecret.clientIdKey }}
+              name: {{ required "oidcClientSecretRef is required when OIDC is enabled" .Parameters.oidcClientSecretRef }}
+              key: client_id
         - name: AIRFLOW_OIDC_CLIENT_SECRET
           valueFrom:
             secretKeyRef:
-              name: {{ $airflowOidc.credentialsSecret.name }}
-              key: {{ $airflowOidc.credentialsSecret.clientSecretKey }}
+              name: {{ .Parameters.oidcClientSecretRef }}
+              key: client_secret
         - name: AIRFLOW_OIDC_API_BASE_URL
           value: {{ $airflowOidcBaseUrl | quote }}
         - name: AIRFLOW_OIDC_ACCESS_TOKEN_URL
@@ -104,10 +104,10 @@ modules:
         - name: AIRFLOW_OIDC_SERVER_METADATA_URL
           value: {{ printf "%s/.well-known/openid-configuration" $airflowOidcIssuerUri | quote }}
         - name: AIRFLOW_OIDC_SCOPE
-          value: {{ $airflowOidc.scope | quote }}
+          value: {{ .Parameters.oidcScope | quote }}
       {{- end }}
         - name: INSECURE_VERIFY_TLS
-          value: {{ if ($airflowOidc.insecureSkipVerify | default false) }}"false"{{ else }}"true"{{ end }}
+          value: {{ if .Parameters.oidcInsecureSkipVerify }}"false"{{ else }}"true"{{ end }}
         - name: REQUESTS_CA_BUNDLE
           value: "/cacerts/ca.crt"
         - name: SSL_CERT_FILE
@@ -131,7 +131,7 @@ modules:
           import os
 
           from flask_appbuilder.security.manager import AUTH_OAUTH
-      
+
           verify_tls = os.environ.get("INSECURE_VERIFY_TLS", "true").lower() == "true"
           oauth_verify = os.environ.get("REQUESTS_CA_BUNDLE") if verify_tls else False
 
@@ -167,12 +167,12 @@ modules:
               },
           ]
         {{- end }}
-        
+
         extraVolumes:
           - name: cacerts
             secret:
               secretName: certs-bundle
-      
+
         extraVolumeMounts:
           - name: cacerts
             mountPath: /cacerts
@@ -218,7 +218,7 @@ modules:
       # full SQLAlchemy connection string. The chart skips generating its own airflow-metadata
       # secret, so credentials never appear in the package values.
       data:
-        metadataSecretName: {{ .Context.airflow.database.credentialsSecret.name }}
+        metadataSecretName: {{ .Parameters.metadataSecret }}
 
       dags:
         mountPath: /opt/airflow/dags
@@ -227,7 +227,7 @@ modules:
         gitSync:
           {{- toYaml $airflowGitSyncValues | nindent 4 }}
           {{- with $airflowGitSync.credentialsSecret }}
-          credentialsSecret: {{ required "context.airflow.dags.gitSync.credentialsSecret.name is required" .name | quote }}
+          credentialsSecret: {{ required "dagsGitSync.credentialsSecret.name is required" .name | quote }}
           {{- end }}
           {{- if or .Context.platform.proxy.httpProxy .Context.platform.proxy.httpsProxy .Context.platform.proxy.noProxy }}
           env:
@@ -244,7 +244,7 @@ modules:
               value: {{ .Context.platform.proxy.noProxy | quote }}
             {{- end }}
           {{- end }}
-      
+
       dagProcessor:
         enabled: true
       flower:
@@ -279,7 +279,7 @@ modules:
         #  limits:
         #   memory: "256Mi"
         #   cpu: "200m"
-      
+
       migrateDatabaseJob:
         enabled: true
         useHelmHooks: false
@@ -299,10 +299,10 @@ modules:
           enable_proxy_fix: "True"
           cookie_secure: "True"
           cookie_samesite: "Lax"
-      
-      apiSecretKeySecretName: {{ .Context.airflow.advanced.config.security.credentialsSecret.name }}
-      jwtSecretName: {{ .Context.airflow.advanced.config.security.credentialsSecret.name }}
-      fernetKeySecretName: {{ .Context.airflow.advanced.config.security.credentialsSecret.name }}
+
+      apiSecretKeySecretName: {{ .Parameters.securitySecretRef }}
+      jwtSecretName: {{ .Parameters.securitySecretRef }}
+      fernetKeySecretName: {{ .Parameters.securitySecretRef }}
 
 roles:
   - airflow

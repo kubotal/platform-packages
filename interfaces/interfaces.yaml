@@ -1,0 +1,94 @@
+# The ClusterInterfaces: typed schema of each connection class.
+# Naming rule: an interface names the consumer NEED (the protocol/API it codes
+# against), not the implementation.
+# Secrets are ordinary values fields carrying a Secret NAME (never content).
+# The expected keys of each secret are documented in the field description.
+apiVersion: kubocd.kubotal.io/v1alpha1
+kind: ClusterInterface
+metadata:
+  name: database-server
+spec:
+  description: Access to a SQL database (engine-parametrized)
+  schema:
+    properties:
+      engine: { type: string, required: true }
+      driver: { type: string, required: true }
+      host: { type: string, required: true }
+      port: { type: integer, required: true }
+      dbName: { type: string, required: true }
+      secretRef:
+        type: string
+        required: true
+        description: "Secret with keys: username, password"
+---
+apiVersion: kubocd.kubotal.io/v1alpha1
+kind: ClusterInterface
+metadata:
+  name: s3
+spec:
+  description: >-
+    Access to an S3-compatible object store. Consumers usually bring their OWN
+    identity (a package parameter naming their credentials Secret), secretRef
+    here is the store admin identity.
+  schema:
+    properties:
+      apiUrl: { type: string, required: true }
+      internalUrl: { type: string }
+      consoleUrl: { type: string }
+      region: { type: string, default: us-east-1 }
+      secretRef:
+        type: string
+        description: "Secret with keys: accessKey, secretKey"
+---
+apiVersion: kubocd.kubotal.io/v1alpha1
+kind: ClusterInterface
+metadata:
+  name: oidc
+spec:
+  description: >-
+    OIDC provider (shared config). The OAuth client is PER consumer: each
+    consumer package takes its own client Secret as an ordinary parameter.
+  schema:
+    properties:
+      issuerUri: { type: string, required: true }
+      authUrl: { type: string, required: true }
+      tokenUrl: { type: string, required: true }
+      jwksUri: { type: string, required: true }
+      userinfoUrl: { type: string, required: true }
+---
+apiVersion: kubocd.kubotal.io/v1alpha1
+kind: ClusterInterface
+metadata:
+  name: hive
+spec:
+  description: Hive metastore (thrift)
+  schema:
+    properties:
+      thriftUri: { type: string, required: true }
+---
+apiVersion: kubocd.kubotal.io/v1alpha1
+kind: ClusterInterface
+metadata:
+  name: trino
+spec:
+  description: Trino query engine
+  schema:
+    properties:
+      url: { type: string, required: true }
+      uri: { type: string, required: true }
+      internalUri: { type: string }
+      catalogs:
+        type: array
+        items: { type: string }
+---
+apiVersion: kubocd.kubotal.io/v1alpha1
+kind: ClusterInterface
+metadata:
+  name: iceberg-catalog
+spec:
+  description: Iceberg REST catalog (Polaris)
+  schema:
+    properties:
+      uri: { type: string, required: true }
+      internalUri: { type: string }
+      realm: { type: string }

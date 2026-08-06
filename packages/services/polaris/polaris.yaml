@@ -14,25 +14,50 @@
 #  limitations under the License.
 #
 
+# Connections wiring: consumes db (interface database-server) and storage (interface s3)
+# as connectionRef parameters, plus the platform OIDC provider as the context variable
+# platform.connections.oidc. The S3 identity is the ordinary parameter s3SecretRef and
+# the OAuth client is oidcClientSecretRef. Produces one iceberg-catalog Connection (output catalog).
 apiVersion: v1alpha1
 name: polaris
-tag: 1.3.0-incubating-p01
+tag: 1.3.0-incubating-cnx01
 protected: false
 description: |
   Apache Polaris is an open-source, fully-featured catalog for Apache Iceberg™.
 usage:
   text: |
     Apache Polaris is an open-source, fully-featured catalog for Apache Iceberg™.
-    Access the UI at {{ .Context.polarisConsole.endpoints.url | replace "{{ .Release.namespace }}" .Release.spec.targetNamespace | replace "{{ .Release.metadata.name }}" .Release.metadata.name | replace "{{ .Context.ingress.suffix }}" .Context.platform.ingress.suffix }}
+    Access the UI at https://polaris-console-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
 schema:
   parameters:
     properties:
       purge: { type: boolean, default: false, description: "Whether to purge realms and all associated entities." }
+      db: { type: connectionRef, interface: database-server, required: true, description: "Connection to the PostgreSQL server hosting the Polaris metastore database." }
+      storage: { type: connectionRef, interface: s3, required: true, description: "Connection to the S3-compatible object store backing the catalogs." }
+      s3SecretRef: { type: string, required: true, description: "Secret with keys accessKey/secretKey, this consumer's own S3 identity (STS and catalog-side Iceberg metadata operations)." }
+      oidcClientSecretRef: { type: string, required: true, description: "Secret with keys client_id/client_secret, the OAuth client of this Polaris instance." }
+      realms:
+        type: array
+        required: true
+        description: "Realm definitions passed to the bootstrap, main and principals modules."
+        items:
+          properties:
+            name: { type: string, required: true }
+          additionalProperties: true
+      defaultRealm: { type: string, required: true, description: "Realm published on the catalog Connection and preselected in the console." }
+      console:
+        properties:
+          oidcClientId: { type: string, default: polaris-console, description: "Public OIDC client (PKCE) used by the console." }
+          oidcScope: { type: string, default: "openid profile email roles offline_access", description: "OIDC scope requested by the console." }
   context:
     properties:
       platform:
         required: true
         properties:
+          connections:
+            required: true
+            properties:
+              oidc: { type: connectionRef, interface: oidc, required: true }
           certificateIssuers:
             required: true
             properties:
@@ -51,44 +76,26 @@ modules:
         repository: quay.io/okdp/charts/polaris-admin
         tag: 1.0.0
     values: |
-      
-      {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
-      {{- $release := printf "%v" .Release.metadata.name -}}
-      {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
-      
-      {{- $databaseId := .Context.polaris.database.provider -}}
-      {{- $databaseProvider := (index .Context $databaseId).provider -}}
-      {{- $databaseHost := $databaseProvider.endpoints.host
-        | replace "{{ .Release.namespace }}" $namespace
-        | replace "{{ .Release.metadata.name }}" $release
-        | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      {{- $databasePort := printf "%v" $databaseProvider.endpoints.port -}}   
-      
-      {{- $databaseJdbcUrl := $databaseProvider.endpoints.jdbcUrl 
-        | replace "{{ connection.host }}" $databaseHost
-        | replace "{{ connection.port }}" $databasePort
-        | replace "{{ dbName }}" .Context.polaris.database.name -}}
-      
       phase: "bootstrap"
-      
+
       bootstrap:
-  
+
         purge: {{ .Parameters.purge }}
-      
+
         image:
           repository: apache/polaris-admin-tool
           tag: 1.3.0-incubating
           pullPolicy: IfNotPresent
-  
+
         database:
-          jdbcUrl: "{{ $databaseJdbcUrl }}"
+          jdbcUrl: "jdbc:postgresql://{{ .Parameters.db.host }}:{{ .Parameters.db.port }}/{{ .Parameters.db.dbName }}"
           secret:
-            name: {{ .Context.polaris.database.credentialsSecret.name }}
-            usernameKey: {{ .Context.polaris.database.credentialsSecret.usernameKey }}
-            passwordKey: {{ .Context.polaris.database.credentialsSecret.passwordKey }}
-      
+            name: {{ .Parameters.db.secretRef }}
+            usernameKey: username
+            passwordKey: password
+
       realms:
-        {{- toYaml .Context.polaris.realms | nindent 2 }}
+        {{- toYaml .Parameters.realms | nindent 2 }}
 
   - name: main
     dependsOn:
@@ -100,54 +107,25 @@ modules:
         chart: polaris
         version: 1.3.0-incubating
     values: |
-      
+
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
-      {{- $release := printf "%v" .Release.metadata.name -}}
       {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
-      
-      {{- $databaseId := .Context.polaris.database.provider -}}
-      {{- $databaseProvider := (index .Context $databaseId).provider -}}
-      {{- $databaseHost := $databaseProvider.endpoints.host
-        | replace "{{ .Release.namespace }}" $namespace
-        | replace "{{ .Release.metadata.name }}" $release
-        | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      {{- $databasePort := printf "%v" $databaseProvider.endpoints.port -}}      
-      
-      {{- $databaseJdbcUrl := $databaseProvider.endpoints.jdbcUrl 
-        | replace "{{ connection.host }}" $databaseHost
-        | replace "{{ connection.port }}" $databasePort
-        | replace "{{ dbName }}" .Context.polaris.database.name -}}
-      
-      {{- $oidcId := .Context.polaris.oidc.provider -}}
-      {{- $oidcProvider := (index .Context $oidcId).provider -}}
-      
-      {{- $oidcIssuerUri := $oidcProvider.issuerUri
-            | replace "{{ .Release.namespace }}" $namespace
-            | replace "{{ .Release.metadata.name }}" $release
-            | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      
-      {{- $polarisEndpointAPI := .Context.polaris.endpoints.url 
-            | replace "{{ .Release.namespace }}" $namespace
-            | replace "{{ .Release.metadata.name }}" $release -}}
-      
-      {{- $polarisEndpointAPIUrl := $polarisEndpointAPI | replace "{{ .Context.ingress.suffix }}" $domain -}}
+
+      {{- $databaseJdbcUrl := printf "jdbc:postgresql://%v:%v/%v" .Parameters.db.host .Parameters.db.port .Parameters.db.dbName -}}
+
+      {{- $oidcIssuerUri := .Context.platform.connections.oidc.issuerUri -}}
+
+      {{- $polarisEndpointAPIUrl := printf "https://polaris-%s.%s" $namespace $domain -}}
       {{- $polarisEndpointAPIHost := regexReplaceAll "^https?://" $polarisEndpointAPIUrl "" -}}
-      
-      {{- $storageId := .Context.polaris.storage.provider -}}
-      {{- $storageProvider := (index .Context $storageId).provider -}}
-      
-      {{- $storageApiUrl := $storageProvider.endpoints.apiUrl
-          | replace "{{ .Release.namespace }}" $namespace
-          | replace "{{ .Release.metadata.name }}" $release
-          | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      
-      {{- $storageRegion := $storageProvider.region -}}
-      
+
+      {{- $storageApiUrl := .Parameters.storage.apiUrl -}}
+      {{- $storageRegion := .Parameters.storage.region -}}
+
       image:
         repository: apache/polaris
         pullPolicy: IfNotPresent
         tag: "1.3.0-incubating"
-      
+
       extraEnv:
         # S3
         - name: AWS_REGION
@@ -156,30 +134,30 @@ modules:
           value: {{ $storageApiUrl }}
         - name: AWS_ENDPOINT_URL_STS
           value: {{ $storageApiUrl }}
-        # The Polaris SeaweedFS identity for STS
+        # The Polaris S3 identity for STS
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
-              name: {{ .Context.polaris.storage.credentialsSecret.name }}
-              key: {{ .Context.polaris.storage.credentialsSecret.accessKeyKey }}
+              name: {{ .Parameters.s3SecretRef }}
+              key: accessKey
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             secretKeyRef:
-              name: {{ .Context.polaris.storage.credentialsSecret.name }}
-              key: {{ .Context.polaris.storage.credentialsSecret.secretKeyKey }}
+              name: {{ .Parameters.s3SecretRef }}
+              key: secretKey
         # Polaris Database
         - name: QUARKUS_DATASOURCE_JDBC_URL
           value: {{ $databaseJdbcUrl }}
         - name: QUARKUS_DATASOURCE_USERNAME
           valueFrom:
             secretKeyRef:
-              name: {{ .Context.polaris.database.credentialsSecret.name }}
-              key: {{ .Context.polaris.database.credentialsSecret.usernameKey }}
+              name: {{ .Parameters.db.secretRef }}
+              key: username
         - name: QUARKUS_DATASOURCE_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ .Context.polaris.database.credentialsSecret.name }}
-              key: {{ .Context.polaris.database.credentialsSecret.passwordKey }}
+              name: {{ .Parameters.db.secretRef }}
+              key: password
         - name: QUARKUS_OIDC_TLS_CONFIGURATION_NAME
           value: "oidc"
         - name: QUARKUS_TLS__OIDC__TRUST_STORE_PEM_CERTS
@@ -190,8 +168,8 @@ modules:
         - name: QUARKUS_OIDC_CLIENT_ID
           valueFrom:
             secretKeyRef:
-              name: {{ .Context.polaris.oidc.credentialsSecret.name }}
-              key: {{ .Context.polaris.oidc.credentialsSecret.clientIdKey }}
+              name: {{ .Parameters.oidcClientSecretRef }}
+              key: client_id
         # Trust The CA
         - name: JAVA_TOOL_OPTIONS
           value: >-
@@ -201,48 +179,89 @@ modules:
 
       persistence:
         type: relational-jdbc
-      
+
       features:
-        {{ toYaml .Context.polaris.features | nindent 2 }}
-      
+        DROP_WITH_PURGE_ENABLED: true
+        # ENFORCE_PRINCIPAL_CREDENTIAL_ROTATION_REQUIRED_CHECKING: false
+        SUPPORTED_CATALOG_STORAGE_TYPES:
+          - S3
+        realmOverrides: {}
+        # my-realm:
+        #   ENFORCE_PRINCIPAL_CREDENTIAL_ROTATION_REQUIRED_CHECKING: true
+
       realmContext:
         type: default
         realms:
-        {{- range .Context.polaris.realms }}
+        {{- range .Parameters.realms }}
           - {{ .name }}
         {{- end }}
-      
+
       advancedConfig:
-        {{ toYaml .Context.polaris.advanced.config | nindent 2 }}
-      
+        polaris.realm-context.header-name: "Polaris-Realm"
+        # Spark and Trino does not pass the header
+        # polaris.realm-context.require-header: false
+        quarkus.http.cors.enabled: "true"
+
       authentication:
         type: mixed
-  
+
       oidc:
         authServeUrl: {{ $oidcIssuerUri }}
         client:
           id: ~
           secret:
-            name: {{ .Context.polaris.oidc.credentialsSecret.name }}
-            key: {{ .Context.polaris.oidc.credentialsSecret.clientSecretKey }}
-        
-        {{- $oidc := .Context.polaris.oidc }}
+            name: {{ .Parameters.oidcClientSecretRef }}
+            key: client_secret
+
+        # Map polaris internal principal and roles with OIDC principal and roles
         principalMapper:
-          {{ toYaml $oidc.principalMapper | nindent 4 }}
+          type: default
+          # You can use 'sub' as stable and immutable identity
+          idClaimPath: ~
+          nameClaimPath: "preferred_username"
         # Mapped OIDC roles are visible, but they do not have the same effect as internal Polaris assignments.
+        # Issue: https://github.com/apache/polaris/issues/2373
+        # Polaris activates only the internal principal roles that are actually granted to that principal in Polaris RBAC
+        # Active Polaris roles = (mapped external roles) ∩ (principal roles granted in Polaris)
         principalRolesMapper:
-          {{ toYaml $oidc.principalRolesMapper | nindent 4 }}
-      
+          type: default
+          rolesClaimPath: realm_access/roles
+          filter: "^(?!default-roles-.*|offline_access$|uma_authorization$).*$"
+          mappings:
+            # The rules are applied sequentially as ordered transforms
+            # Strip the "polaris_" prefix from admin roles and convert them to Polaris roles:
+            # polaris_service_admin -> PRINCIPAL_ROLE:service_admin
+            # polaris_catalog_admin -> PRINCIPAL_ROLE:catalog_admin
+            # platform_admin -> PRINCIPAL_ROLE:platform_admin
+            - regex: "^polaris_(.*)$"
+              replacement: "PRINCIPAL_ROLE:$1"
+            # Fallback for normal roles, but do NOT touch values already prefixed by Polaris.
+            - regex: "^(?!PRINCIPAL_ROLE:)(?!polaris_)(.*)$"
+              replacement: "PRINCIPAL_ROLE:$1"
+
       logging:
         level: DEBUG
-      
-      {{- $cors := toYaml .Context.polaris.advanced.cors -}}
-      {{- $cors = $cors
-            | replace "{{ .Context.ingress.suffix }}" .Context.platform.ingress.suffix
-            | replace "{{ .Release.namespace }}" .Release.spec.targetNamespace
-      }}
-      cors:{{ $cors | nindent 2 }}
-      
+
+      cors:
+        allowedOrigins:
+          - "https://polaris-console-{{ $namespace }}.{{ $domain }}"
+        allowedMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "PATCH"
+          - "OPTIONS"
+        allowedHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "Polaris-Realm"
+          - "X-Request-ID"
+        exposedHeaders:
+          - "*"
+        accessControlMaxAge: "PT10M"
+        accessControlAllowCredentials: true
+
       ingress:
         enabled: true
         className: "nginx"
@@ -258,12 +277,12 @@ modules:
           - hosts:
               - {{ $polarisEndpointAPIHost }}
             secretName: {{ .Release.metadata.name }}-tls
-            
+
       extraVolumes:
         - name: cacerts
           secret:
             secretName: certs-bundle
-      
+
       extraVolumeMounts:
         - name: cacerts
           mountPath: /cacerts
@@ -277,40 +296,34 @@ modules:
         repository: quay.io/okdp/charts/polaris-admin
         tag: 1.0.0
     values: |
-      
+
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
-      {{- $release := printf "%v" .Release.metadata.name -}}
       {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
-      
-      {{- $polarisEndpointAPI := .Context.polaris.endpoints.url 
-            | replace "{{ .Release.namespace }}" $namespace
-            | replace "{{ .Release.metadata.name }}" $release -}}
-      
-      {{- $polarisEndpointAPIUrl := $polarisEndpointAPI | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      {{- $polarisEndpointAPIHost := regexReplaceAll "^https?://" $polarisEndpointAPIUrl "" -}}
-      
+
+      {{- $polarisEndpointAPIUrl := printf "https://polaris-%s.%s" $namespace $domain -}}
+
       phase: "principals"
-      
+
       principals:
-      
+
         image:
           repository: curlimages/curl
           tag: 8.18.0
           pullPolicy: IfNotPresent
-      
+
         polaris:
           url: {{ $polarisEndpointAPIUrl }}
-    
+
         caCertPath: /cacerts/ca.crt
 
       realms:
-        {{- toYaml .Context.polaris.realms | nindent 2 }}
+        {{- toYaml .Parameters.realms | nindent 2 }}
 
       extraVolumes:
         - name: cacerts
           secret:
             secretName: certs-bundle
-      
+
       extraVolumeMounts:
         - name: cacerts
           mountPath: /cacerts
@@ -326,43 +339,30 @@ modules:
     values: |
 
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
-      {{- $release := printf "%v" .Release.metadata.name -}}
       {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
-      
-      {{- $oidcId := .Context.polarisConsole.oidc.provider -}}
-      {{- $oidcProvider := (index .Context $oidcId).provider -}}
-      
-      {{- $oidcIssuerUri := $oidcProvider.issuerUri
-            | replace "{{ .Release.namespace }}" $namespace
-            | replace "{{ .Release.metadata.name }}" $release
-            | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      
-      {{- $polarisEndpointAPI := .Context.polarisConsole.apiUrl 
-             | replace "{{ .Release.namespace }}" $namespace
-             | replace "{{ .Release.metadata.name }}" $release -}}
-      {{- $polarisEndpointAPIUrl := $polarisEndpointAPI | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      
-      {{- $polarisEndpointConsole := .Context.polarisConsole.endpoints.url 
-             | replace "{{ .Release.namespace }}" $namespace
-             | replace "{{ .Release.metadata.name }}" $release -}}
-      {{- $polarisEndpointConsoleUrl := $polarisEndpointConsole | replace "{{ .Context.ingress.suffix }}" $domain -}}
+
+      {{- $oidcIssuerUri := .Context.platform.connections.oidc.issuerUri -}}
+
+      {{- $polarisEndpointAPIUrl := printf "https://polaris-%s.%s" $namespace $domain -}}
+
+      {{- $polarisEndpointConsoleUrl := printf "https://polaris-console-%s.%s" $namespace $domain -}}
       {{- $polarisEndpointConsoleHost := regexReplaceAll "^https?://" $polarisEndpointConsoleUrl "" -}}
-    
+
       image:
         repository: quay.io/okdp/polaris-console
         tag: v0.1.0
         pullPolicy: Always
-        
+
       env:
         polarisApiUrl: "{{ $polarisEndpointAPIUrl }}"
-        polarisRealm: "{{ .Context.polarisConsole.defaultRealm }}"
+        polarisRealm: "{{ .Parameters.defaultRealm }}"
         oauthTokenUrl: "{{ $polarisEndpointAPIUrl }}/api/catalog/v1/oauth/tokens"
-      
+
       extraEnv:
         VITE_OIDC_ISSUER_URL: "{{ $oidcIssuerUri }}"
-        VITE_OIDC_CLIENT_ID: "{{ .Context.polarisConsole.oidc.clientId }}"
+        VITE_OIDC_CLIENT_ID: "{{ .Parameters.console.oidcClientId }}"
         VITE_OIDC_REDIRECT_URI: "{{ $polarisEndpointConsoleUrl }}/auth/callback"
-        VITE_OIDC_SCOPE: "{{ .Context.polarisConsole.oidc.scope }}"
+        VITE_OIDC_SCOPE: "{{ .Parameters.console.oidcScope }}"
 
       ingress:
         enabled: true
@@ -380,6 +380,12 @@ modules:
             hosts:
               - {{ $polarisEndpointConsoleHost }}
 
+outputs:
+  - name: catalog
+    interface: iceberg-catalog
+    values:
+      uri: "https://polaris-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}/api/catalog"
+      realm: "{{ .Parameters.defaultRealm }}"
 roles:
   - data-catalog
   - iceberg-catalog

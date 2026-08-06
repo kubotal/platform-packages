@@ -14,9 +14,14 @@
 #  limitations under the License.
 #
 
+# Connections wiring: the metadata and examples databases are connectionRef
+# parameters (interface database-server), the OIDC provider is a platform
+# context connection (interface oidc, OAuth clients stay ordinary Secret name
+# parameters), and trino datasources are a list of per item connectionRefs.
+
 apiVersion: v1alpha1
 name: superset
-tag: 6.0.0-p01
+tag: 6.0.0-cnx01
 protected: false
 description: |
   Apache Superset - Enterprise business intelligence platform for modern data teams.
@@ -25,21 +30,52 @@ description: |
 usage:
   text: |
     Apache Superset provides modern data visualization and exploration capabilities.
-    Access the UI at {{ 
-     .Context.superset.endpoints.url 
-     | replace "{{ .Release.namespace }}" .Release.spec.targetNamespace 
-     | replace "{{ .Release.metadata.name }}" .Release.metadata.name 
-     | replace "{{ .Context.ingress.suffix }}" .Context.platform.ingress.suffix
-    }}
+    Access the UI at https://superset-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
 schema:
   parameters:
     properties:
       load_examples: { type: boolean, default: true, description: "Whether to load superset examples" }
+      # Superset metadata database
+      metadataDb: { type: connectionRef, interface: database-server, required: true }
+      # Database hosting the superset examples (used when load_examples is true)
+      examplesDb: { type: connectionRef, interface: database-server, required: true }
+      # Secret Key for Superset's Flask App. Secret with key: superset_secret_key
+      secretKeyRef: { type: string, required: true }
+      # External redis. Host defaults to the redis bundled by the chart
+      redisHost: { type: string }
+      redisPort: { type: integer, default: 6379 }
+      # Secret with keys: username, password
+      redisSecretRef: { type: string, required: true }
+      # OAuth client of THIS instance. The provider comes from the platform context
+      oidcEnabled: { type: boolean, default: true }
+      oidcProvider: { type: string, default: keycloak, description: "Provider display name" }
+      oidcScope: { type: string, default: "openid profile email groups" }
+      oidcUsePKCE: { type: boolean, default: true }
+      # Secret with keys: client_id, client_secret
+      oidcClientSecretRef: { type: string, required: true }
+      # Map of OIDC roles to lists of superset roles
+      oidcRoleMapping: { type: object, properties: {}, additionalProperties: true }
+      trinoOidcEnabled: { type: boolean, default: true }
+      trinoOidcScope: { type: string, default: "openid profile email groups" }
+      # Secret with keys: client_id, client_secret
+      trinoOidcClientSecretRef: { type: string, required: true }
+      # Datasources: one list, each element wires its own trino connection and
+      # its catalog. The name is the display name in the Superset UI
+      datasources:
+        type: array
+        items:
+          properties:
+            name: { type: string, required: true }
+            trino: { type: connectionRef, interface: trino, required: true }
+            catalog: { type: string, default: hive }
   context:
     properties:
       platform:
         required: true
         properties:
+          connections:
+            properties:
+              oidc: { type: connectionRef, interface: oidc, required: true }
           certificateIssuers:
             required: true
             properties:
@@ -62,96 +98,17 @@ modules:
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
       {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
-      
-      {{- $databaseId := .Context.superset.database.provider -}}
-      {{- $databaseProvider := (index .Context $databaseId).provider -}}
-      {{- $databaseHost := $databaseProvider.endpoints.host
-        | replace "{{ .Release.namespace }}" $namespace
-        | replace "{{ .Release.metadata.name }}" $release
-        | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      {{- $databasePort := printf "%v" $databaseProvider.endpoints.port -}}
-      
-      {{- $examplesDatabaseId := .Context.superset.load_examples.database.provider -}}
-      {{- $examplesDatabaseProvider := (index .Context $examplesDatabaseId).provider -}}
-      {{- $examplesDatabaseHost := $examplesDatabaseProvider.endpoints.host
-        | replace "{{ .Release.namespace }}" $namespace
-        | replace "{{ .Release.metadata.name }}" $release
-        | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      {{- $examplesDatabasePort := printf "%v" $examplesDatabaseProvider.endpoints.port -}}
-      {{- $examplesDatabaseJdbcUrl := .Context.superset.load_examples.database.connection.jdbcUrl
-        | replace "{{ connection.host }}" $examplesDatabaseHost
-        | replace "{{ connection.port }}" $examplesDatabasePort
-        | replace "{{ dbName }}" .Context.superset.load_examples.database.name 
-        | replace "{{ username }}" "$DB_EXAMPLES_USER"
-        | replace "{{ password }}" "$DB_EXAMPLES_PASS" -}}
-      
-      {{- $oidcId := .Context.superset.oidc.provider -}}
-      {{- $oidcProvider := (index .Context $oidcId).provider -}}
-      
-      {{- $oidcName := $oidcProvider.name -}}
-      
-      {{- $oidcBaseUrl := $oidcProvider.baseUri
-            | replace "{{ .Release.namespace }}" $namespace
-            | replace "{{ .Release.metadata.name }}" $release
-            | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      
-      {{- $supersetOidc := .Context.superset.oidc | default dict }}
-      {{- $supersetOidcEnabled := $supersetOidc.enabled | default false }}
-      {{- $supersetOidcRoleMapping := $supersetOidc.roleMapping | default dict }}
-      
-      {{- $supersetUrl := .Context.superset.endpoints.url 
-          | replace "{{ .Release.namespace }}" $namespace
-          | replace "{{ .Release.metadata.name }}" $release
-          | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      {{- $supersetHost := regexReplaceAll "^https?://" $supersetUrl "" -}}
-      {{- $supersetConnectionsRaw := (.Context.superset.connections | default list) -}}
-      {{- if not (kindIs "slice" $supersetConnectionsRaw) }}
-        {{- fail "context.superset.connections must be a list" -}}
-      {{- end }}
-      {{- $supersetConnections := dict -}}
-      {{- range $connection := $supersetConnectionsRaw }}
-        {{- if not (and $connection $connection.name) }}
-          {{- fail "each item in context.superset.connections must define name" -}}
-        {{- end }}
-        {{- $_ := set $supersetConnections $connection.name $connection -}}
-      {{- end }}
-      {{- $supersetDataSourcesRaw := (.Context.superset.dataSources | default "") -}}
-      {{- $supersetDataSources := ($supersetDataSourcesRaw | fromYaml | default dict) -}}
-      {{- $selectedDatabases := (dig "databases" nil $supersetDataSources | default list) -}}
-      {{- if not (kindIs "slice" $selectedDatabases) }}
-        {{- fail "context.superset.dataSources.databases must be a list" -}}
-      {{- end }}
-      {{- $importDataSources := dict "databases" (list) -}}
-      {{- range $databaseName := $selectedDatabases }}
-        {{- $connection := index $supersetConnections $databaseName -}}
-        {{- if $connection }}
-          {{- $connectionYaml := $connection.yaml -}}
-          {{- $serviceId := dig "service" "name" "" $connection -}}
-          {{- $connectionYaml = $connectionYaml
-                | replace "{{ connection.name }}" $databaseName
-                | replace "{{ database.name }}" $databaseName -}}
-          {{- if $serviceId }}
-            {{- $service := index $.Context $serviceId -}}
-            {{- $serviceUri := $service.endpoints.uri
-                  | replace "{{ .Release.namespace }}" $namespace
-                  | replace "{{ .Release.metadata.name }}" $release
-                  | replace "{{ .Context.ingress.suffix }}" $domain -}}
-            {{- $connectionYaml = $connectionYaml
-                  | replace "{{ service.endpoint.uri }}" $serviceUri
-                  | replace "{{ service.endpoints.uri }}" $serviceUri -}}
-          {{- end }}
-          {{- $connectionYaml = $connectionYaml
-                | replace "{{ .Release.namespace }}" $namespace
-                | replace "{{ .Release.metadata.name }}" $release
-                | replace "{{ .Context.ingress.suffix }}" $domain -}}
-          {{- $connectionConfig := ($connectionYaml | fromYaml) -}}
-          {{- if $connectionConfig }}
-            {{- $_ := set $importDataSources "databases" (append (get $importDataSources "databases") $connectionConfig) -}}
-          {{- end }}
-        {{- end }}
-      {{- end }}
-      {{- $importDataSourcesYaml := toYaml $importDataSources -}}
-            
+
+      {{- /* The examples loader is postgresql specific (psycopg2 dialect, main search_path) */ -}}
+      {{- $examplesDatabaseJdbcUrl := printf "postgresql+psycopg2://$DB_EXAMPLES_USER:$DB_EXAMPLES_PASS@%s:%v/%s?options=-csearch_path%%3Dmain" .Parameters.examplesDb.host .Parameters.examplesDb.port .Parameters.examplesDb.dbName -}}
+
+      {{- /* The oidc connection resolved from the platform context */ -}}
+      {{- $oidcBaseUrl := printf "%s/protocol/openid-connect" .Context.platform.connections.oidc.issuerUri -}}
+
+      {{- $supersetOidcRoleMapping := .Parameters.oidcRoleMapping | default dict }}
+
+      {{- $supersetHost := printf "superset-%s.%s" $namespace $domain -}}
+
       okdp:
         # Superset configuration
         superset:
@@ -185,11 +142,11 @@ modules:
 
         # Oauth2 configuration
         oauth:
-          enabled: {{ .Context.superset.oidc.enabled }}
-          provider: "{{ $oidcName }}"
+          enabled: {{ .Parameters.oidcEnabled }}
+          provider: "{{ .Parameters.oidcProvider }}"
           base_url: {{ $oidcBaseUrl }}
-          scope: "{{ .Context.superset.oidc.scope }}"
-          use_pkce: {{ .Context.superset.oidc.usePKCE }}
+          scope: "{{ .Parameters.oidcScope }}"
+          use_pkce: {{ .Parameters.oidcUsePKCE }}
           auth_registration: &auth_registration |
             AUTH_USER_REGISTRATION = True
             AUTH_ROLE_PUBLIC = "Public"
@@ -201,13 +158,13 @@ modules:
               {{ $oidcRole | quote }}: {{ $supersetRoles | toJson }},
             {{- end }}
             }
-        
+
         trino:
           oauth:
-            enabled: {{ .Context.superset.trino.oidc.enabled }}
+            enabled: {{ .Parameters.trinoOidcEnabled }}
             base_url: {{ $oidcBaseUrl }}
-            scope: "{{ .Context.superset.trino.oidc.scope }}"
-      
+            scope: "{{ .Parameters.trinoOidcScope }}"
+
       superset:
         image:
           repository: quay.io/okdp/superset
@@ -216,16 +173,22 @@ modules:
         initImage:
           repository: quay.io/okdp/superset
           tag: 6.0.0-dockerize
-          pullPolicy: IfNotPresent      
+          pullPolicy: IfNotPresent
         supersetWebsockets:
           image:
             repository: quay.io/okdp/superset
             tag: 6.0.0-websocket
             pullPolicy: IfNotPresent
-      
+
         extraConfigs:
           import_datasources.yaml: |
-            {{ $importDataSourcesYaml | trim | nindent 14 }}
+            databases:
+            {{- range .Parameters.datasources }}
+              - database_name: {{ .name }}
+                sqlalchemy_uri: "{{ .trino.internalUri }}/{{ .catalog }}"
+                expose_in_sqllab: true
+                tables: []
+            {{- end }}
         postgresql:
           # Use an external database
           enabled: false
@@ -242,56 +205,56 @@ modules:
           - name: SUPERSET_SECRET_KEY
             valueFrom:
               secretKeyRef:
-                name: {{ .Context.superset.advanced.config.security.credentialsSecret.name }}
-                key: {{ .Context.superset.advanced.config.security.credentialsSecret.key }}
+                name: {{ .Parameters.secretKeyRef }}
+                key: superset_secret_key
           # Superset/DB credentials
           - name: DB_USER
             valueFrom:
               secretKeyRef:
-                name: {{ .Context.superset.database.credentialsSecret.name }}
-                key: {{ .Context.superset.database.credentialsSecret.usernameKey }}
+                name: {{ .Parameters.metadataDb.secretRef }}
+                key: username
           - name: DB_PASS
             valueFrom:
               secretKeyRef:
-                name: {{ .Context.superset.database.credentialsSecret.name }}
-                key: {{ .Context.superset.database.credentialsSecret.passwordKey }}
+                name: {{ .Parameters.metadataDb.secretRef }}
+                key: password
           # Superset/Redis credentials
           - name: REDIS_USER
             valueFrom:
               secretKeyRef:
-                name: {{ .Context.superset.redis.credentialsSecret.name }}
-                key: {{ .Context.superset.redis.credentialsSecret.usernameKey }}
+                name: {{ .Parameters.redisSecretRef }}
+                key: username
           - name: REDIS_PASSWORD
             valueFrom:
               secretKeyRef:
-                name: {{ .Context.superset.redis.credentialsSecret.name }}
-                key: {{ .Context.superset.redis.credentialsSecret.passwordKey }}
+                name: {{ .Parameters.redisSecretRef }}
+                key: password
           # OIDC credentials
           - name: AUTH_OAUTH_CLIENT_ID
             valueFrom:
               secretKeyRef:
-                name: {{ .Context.superset.oidc.credentialsSecret.name }}
-                key: {{ .Context.superset.oidc.credentialsSecret.clientIdKey }}
+                name: {{ .Parameters.oidcClientSecretRef }}
+                key: client_id
           - name: AUTH_OAUTH_CLIENT_SECRET
             valueFrom:
               secretKeyRef:
-                name: {{ .Context.superset.oidc.credentialsSecret.name }}
-                key: {{ .Context.superset.oidc.credentialsSecret.clientSecretKey }}
+                name: {{ .Parameters.oidcClientSecretRef }}
+                key: client_secret
           # OIDC Trino credentials
           - name: TRINO_OAUTH_CLIENT_ID
             valueFrom:
               secretKeyRef:
-                name: {{ .Context.superset.trino.oidc.credentialsSecret.name }}
-                key: {{ .Context.superset.trino.oidc.credentialsSecret.clientIdKey }}
+                name: {{ .Parameters.trinoOidcClientSecretRef }}
+                key: client_id
           - name: TRINO_OAUTH_CLIENT_SECRET
             valueFrom:
               secretKeyRef:
-                name: {{ .Context.superset.trino.oidc.credentialsSecret.name }}
-                key: {{ .Context.superset.trino.oidc.credentialsSecret.clientSecretKey }}
+                name: {{ .Parameters.trinoOidcClientSecretRef }}
+                key: client_secret
           # CA
           - name: REQUESTS_CA_BUNDLE
             value: /cacerts/ca.crt
-      
+
           {{- if .Context.platform.proxy.httpProxy }}
           - name: HTTP_PROXY
             value: {{ .Context.platform.proxy.httpProxy | quote }}
@@ -307,34 +270,34 @@ modules:
           # Examples
           {{- if .Parameters.load_examples }}
           - name: DB_EXAMPLES_HOST
-            value: {{ $examplesDatabaseHost }}
+            value: {{ .Parameters.examplesDb.host }}
           - name: DB_EXAMPLES_PORT
-            value: "{{ $examplesDatabasePort }}"
+            value: "{{ .Parameters.examplesDb.port }}"
           - name: DB_EXAMPLES_NAME
-            value: {{ .Context.superset.load_examples.database.name }}
+            value: {{ .Parameters.examplesDb.dbName }}
           - name: DB_EXAMPLES_USER
             valueFrom:
               secretKeyRef:
-                name: {{ .Context.superset.load_examples.database.credentialsSecret.name }}
-                key: {{ .Context.superset.load_examples.database.credentialsSecret.usernameKey }}         
+                name: {{ .Parameters.examplesDb.secretRef }}
+                key: username
           - name: DB_EXAMPLES_PASS
             valueFrom:
               secretKeyRef:
-                name: {{ .Context.superset.load_examples.database.credentialsSecret.name }}
-                key: {{ .Context.superset.load_examples.database.credentialsSecret.passwordKey }}            
+                name: {{ .Parameters.examplesDb.secretRef }}
+                key: password
           {{- end }}
         supersetNode:
           # Connections to an existing database and cache
           connections:
             # -- PostgreSQL
-            db_host: "{{ $databaseHost }}"
-            db_port: "{{ $databasePort }}"
-            db_name: {{ .Context.superset.database.name }}
+            db_host: "{{ .Parameters.metadataDb.host }}"
+            db_port: "{{ .Parameters.metadataDb.port }}"
+            db_name: {{ .Parameters.metadataDb.dbName }}
             db_user: ~
             db_pass: ~
             # -- Redis
-            redis_host: {{ default (printf "%s-main-redis-headless" $release) .Context.superset.redis.host | quote }}
-            redis_port: {{ .Context.superset.redis.port }}
+            redis_host: {{ default (printf "%s-main-redis-headless" $release) .Parameters.redisHost | quote }}
+            redis_port: {{ .Parameters.redisPort }}
             redis_user: ~
             redis_password: ~
             redis_cache_db: "1"
@@ -342,7 +305,7 @@ modules:
             redis_ssl:
               enabled: false
               ssl_cert_reqs: CERT_NONE
-            
+
         ingress:
           enabled: true
           ingressClassName: "nginx"
@@ -364,18 +327,18 @@ modules:
             - hosts:
                 - {{ $supersetHost }}
               secretName: "{{ $release }}-tls-secret"
-      
+
         configOverrides:
           auth_registration: *auth_registration
           oauth_to_superset_roles_mapping: *oauth2_superset_roles_mapping
           extra_config: *extra_config
           feature_flags: *feature_flags
-      
+
         extraVolumes:
           - name: cacerts
             secret:
               secretName: certs-bundle
-        
+
         extraVolumeMounts:
           - name: cacerts
             mountPath: /cacerts

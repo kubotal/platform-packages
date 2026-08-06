@@ -1,0 +1,286 @@
+#
+# Copyright 2026 The OKDP Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+
+# Connections wiring: SeaweedFS is the S3 store producer. It consumes no
+# connection and produces one s3 Connection (output "s3") carrying
+# apiUrl/internalUrl/region plus the store admin identity as secretRef.
+# S3 identities and buckets, formerly read from the Context blob, are parameters.
+
+apiVersion: v1alpha1
+name: seaweedfs
+tag: 4.17.0-cnx01
+protected: false
+description: |
+  SeaweedFS is a simple and highly scalable distributed file system. There are the objectives to store billions of files and to serve the files fast!
+usage:
+  text: |
+    SeaweedFS is a simple and highly scalable distributed file system.
+    Access the console at https://{{ .Release.metadata.name }}-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
+schema:
+  parameters:
+    properties:
+      username: { type: string, required: true, default: "admin" }
+      password: { type: string, required: true, default: "admin123" }
+      volumeReplicas: { type: integer, required: true, default: 1 }
+      masterStorage: { type: string, required: true, default: "1" }
+      masterLogStorage: { type: string, required: true, default: "0.5" }
+      volumeStorage: { type: string, required: true, default: "2" }
+      filerStorage: { type: string, required: true, default: "0.5" }
+      filerLogStorage: { type: string, required: true, default: "0.5" }
+      # S3 identities of the store. Each secretRef is a Secret with keys
+      # accessKey/secretKey. admin marks the store admin identity, whose
+      # secretRef is exported in the s3 Connection.
+      identities:
+        type: array
+        items:
+          properties:
+            name: { type: string, required: true }
+            secretRef: { type: string, required: true }
+            actions:
+              type: array
+              items: { type: string }
+            admin: { type: boolean, default: false }
+      # Buckets to create at startup.
+      buckets:
+        type: array
+        items: { type: string }
+      bucketAnonymousRead: { type: boolean, default: false }
+      s3Enabled: { type: boolean, default: true }
+      stsEnabled: { type: boolean, default: true }
+      stsRoleArn: { type: string, default: "arn:aws:iam::000000000000:role/S3WriteRole" }
+  context:
+    properties:
+      platform:
+        required: true
+        properties:
+          certificateIssuers:
+            required: true
+            properties:
+              selfSigned:
+                properties:
+                  name: { type: string, required: true }
+          storageClass:
+            required: true
+            properties:
+              data: { type: string, required: true }
+          ingress:
+            required: true
+            properties:
+              suffix: { type: string, required: true }
+modules:
+  - name: auth-config
+    source:
+      oci:
+        repository: quay.io/okdp/charts/seaweedfs-auth-config
+        tag: 1.0.0
+    values: |
+      # Pin the chart fullname so the generated IAM ConfigMap has a deterministic
+      # name, independent of Helm's fullname dedup (wich depends on the release name)
+      fullnameOverride: {{ .Release.metadata.name }}-auth-config
+
+      iamConfig:
+        sts:
+          tokenDuration: "1h"
+          maxSessionLength: "12h"
+          issuer: "seaweedfs-sts"
+          signingKey: ""
+
+        # -- IAM policies to define in the SeaweedFS IAM config.
+        policies:
+          - name: "S3WritePolicy"
+            document:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action: ["s3:List*","s3:Get*","s3:Put*","s3:DeleteObject"]
+                  Resource: ["*"]
+
+        # -- IAM roles to define in the SeaweedFS IAM config.
+        roles:
+          - roleName: "S3WriteRole"
+            roleArn: "{{ .Parameters.stsRoleArn }}"
+            attachedPolicies: ["S3WritePolicy"]
+            trustPolicy:
+              Version: "2012-10-17"
+              Statement:
+                # Polaris uses Credentials-based STS AssumeRole
+                - Effect: "Allow"
+                  Principal: "*"
+                  Action:
+                    - "sts:AssumeRole"
+
+      s3Config:
+        enabled: true
+        secretName: {{ .Release.metadata.name }}-s3-config
+        identities:
+        {{- range .Parameters.identities }}
+          - name: {{ .name }}
+            credentialsSecret:
+              name: {{ .secretRef }}
+              accessKeyKey: accessKey
+              secretKeyKey: secretKey
+            actions: {{ .actions | default list | toJson }}
+        {{- end }}
+
+      filer:
+        auth:
+          method: basic
+          basic:
+            create_auth_secret: creds-seaweedfs-filer-basic
+            username: {{ .Parameters.username }}
+            password: {{ .Parameters.password }}
+
+  - name: main
+    dependsOn:
+      - auth-config
+    timeout: 10m
+    source:
+      helmRepository:
+        url: https://seaweedfs.github.io/seaweedfs/helm
+        chart: seaweedfs
+        version: 4.17.0
+    values: |
+      {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
+      {{- $release := printf "%v" .Release.metadata.name -}}
+      {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
+
+      {{- $seaweedfsS3Host := printf "%s-%s-api.%s" $release $namespace $domain -}}
+      {{- $seaweedfsFilerHost := printf "%s-%s.%s" $release $namespace $domain -}}
+
+      nameOverride: "{{ .Release.metadata.name }}"
+      fullnameOverride: "{{ .Release.metadata.name }}"
+
+      global:
+        imageName: chrislusf/seaweedfs
+
+      image:
+        tag: "4.17"
+
+      master:
+        enabled: true
+        replicas: 1
+        data:
+          type: "persistentVolumeClaim"
+          storageClass: "{{ .Context.platform.storageClass.workspace }}"
+          size: "{{ .Parameters.masterStorage }}Gi"
+
+        logs:
+          type: "persistentVolumeClaim"
+          storageClass: "{{ .Context.platform.storageClass.workspace }}"
+          size: "{{ .Parameters.masterLogStorage }}Gi"
+
+      volume:
+        enabled: true
+        replicas: {{ .Parameters.volumeReplicas }}
+        dataDirs:
+          - name: data
+            type: "persistentVolumeClaim"
+            storageClass: "{{ .Context.platform.storageClass.workspace }}"
+            size: "{{ .Parameters.volumeStorage }}Gi"
+            maxVolumes: 0
+
+      filer:
+        enabled: true
+        replicas: 1
+        enablePVC: true
+        port: 8888
+        data:
+          type: "persistentVolumeClaim"
+          storageClass: "{{ .Context.platform.storageClass.workspace }}"
+          size: "{{ .Parameters.filerStorage }}Gi"
+        logs:
+          type: "persistentVolumeClaim"
+          storageClass: "{{ .Context.platform.storageClass.workspace }}"
+          size: "{{ .Parameters.filerLogStorage }}Gi"
+        ingress:
+          enabled: true
+          className: nginx
+          annotations:
+            nginx.ingress.kubernetes.io/proxy-body-size: "130m"
+            cert-manager.io/cluster-issuer: "{{ .Context.platform.certificateIssuers.selfSigned.name }}"
+            nginx.ingress.kubernetes.io/auth-type: basic
+            nginx.ingress.kubernetes.io/auth-secret: creds-seaweedfs-filer-basic
+            nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
+          host: {{ $seaweedfsFilerHost }}
+          path: "/"
+          pathType: Prefix
+          tls:
+            - secretName: seaweedfs-filer-tls
+              hosts:
+                - {{ $seaweedfsFilerHost }}
+
+      s3:
+        enabled: {{ .Parameters.s3Enabled }}
+        enableAuth: true
+        existingConfigSecret: {{ .Release.metadata.name }}-s3-config
+        {{- if .Parameters.buckets }}
+        createBuckets:
+        {{- range .Parameters.buckets }}
+          - name: {{ . }}
+            anonymousRead: {{ $.Parameters.bucketAnonymousRead }}
+        {{- end }}
+        {{- end }}
+
+        extraVolumes: |
+          - name: auth-config
+            configMap:
+              name: {{ .Release.metadata.name }}-auth-config
+
+        extraVolumeMounts: |
+          - name: auth-config
+            mountPath: /etc/seaweed/iam
+            readOnly: true
+        {{- if .Parameters.stsEnabled }}
+        extraArgs:
+          - "-iam.config=/etc/seaweed/iam/iam.json"
+        {{- end }}
+
+        ingress:
+          enabled: true
+          className: nginx
+          annotations:
+            nginx.ingress.kubernetes.io/proxy-body-size: "130m"
+            cert-manager.io/cluster-issuer: "{{ .Context.platform.certificateIssuers.selfSigned.name }}"
+          host: {{ $seaweedfsS3Host }}
+          path: "/"
+          pathType: Prefix
+          tls:
+            - secretName: seaweedfs-s3-tls
+              hosts:
+              - {{ $seaweedfsS3Host }}
+
+# Connection 'kcd-<release>-s3' (interface s3). apiUrl is the external ingress
+# URL, internalUrl the in-cluster service URL. secretRef is the store admin
+# identity, picked from the admin item of the identities parameter. Consumers
+# bring their own identity as a package parameter, not via the Connection.
+outputs: |
+  - name: s3
+    interface: s3
+    values:
+      apiUrl: "https://{{ .Release.metadata.name }}-{{ .Release.spec.targetNamespace }}-api.{{ .Context.platform.ingress.suffix }}"
+      internalUrl: "http://{{ .Release.metadata.name }}-s3.{{ .Release.spec.targetNamespace }}.svc.cluster.local:8333"
+      region: us-east-1
+      {{- range .Parameters.identities }}
+      {{- if .admin }}
+      secretRef: "{{ .secretRef }}"
+      {{- end }}
+      {{- end }}
+
+roles:
+  - storage
+dependencies:
+  - ingress
+  # - database-server

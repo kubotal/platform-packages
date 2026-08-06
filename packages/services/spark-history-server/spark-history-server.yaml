@@ -14,9 +14,13 @@
 #  limitations under the License.
 #
 
+# Connections wiring: the event log store is an s3 connectionRef parameter (storage),
+# the S3 identity is the ordinary parameter s3SecretRef (Secret keys accessKey/secretKey),
+# and the OIDC provider is a platform context variable (platform.connections.oidc).
+# The OAuth client of this instance is the ordinary parameter oidcClientSecretRef.
 apiVersion: v1alpha1
 name: spark-history-server
-tag: 3.5.1-p04
+tag: 3.5.1-cnx01
 protected: false
 description: |
   Spark History Server - Monitoring and debugging interface for Apache Spark applications.
@@ -26,21 +30,32 @@ usage:
   text: |
     Spark History Server provides a web UI for viewing completed Spark applications.
     {{- if .Parameters.enableWebProxy }}
-    {{- $historyEndpointUrl := .Context.sparkHistory.endpoints.url
-    | replace "{{ .Release.namespace }}" .Release.spec.targetNamespace
-    | replace "{{ .Release.metadata.name }}" .Release.metadata.name
-    | replace "{{ .Context.ingress.suffix }}" .Context.platform.ingress.suffix
-    -}}
-    {{- $historyEndpointScheme := regexFind "^https?://" $historyEndpointUrl | default "https://" -}}
-    Access the UI at {{- printf "%s%s-%s.%s" $historyEndpointScheme .Parameters.webProxyUrlPrefix .Release.spec.targetNamespace .Context.platform.ingress.suffix -}}
+    Access the UI at https://{{ .Parameters.webProxyUrlPrefix }}-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
     {{- else }}
-    Access the UI at {{ .Context.sparkHistory.endpoints.url | replace "{{ .Release.namespace }}" .Release.spec.targetNamespace | replace "{{ .Release.metadata.name }}" .Release.metadata.name | replace "{{ .Context.ingress.suffix }}" .Context.platform.ingress.suffix }}
+    Access the UI at https://spark-history-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
     {{- end }}
 schema:
   parameters:
     properties:
       enableWebProxy: { type: boolean, default: true, description: "Whether to enable Spark History web proxy" }
       webProxyUrlPrefix: { type: string, default: "spark-web-proxy", description: "Spark web proxy url prefix" }
+      storage: { type: connectionRef, interface: s3, required: true, description: "Connection to the S3-compatible object store holding the Spark event logs." }
+      s3SecretRef: { type: string, required: true, description: "Secret with keys accessKey/secretKey, this consumer's own S3 identity." }
+      oidcClientSecretRef: { type: string, required: true, description: "OAuth client of this instance. Secret with keys: client_id, client_secret." }
+      oidcScope: { type: string, default: "openid+profile+email+offline_access+groups", description: "Scopes requested on the OAuth2 login flow." }
+      oidcUsePKCE: { type: boolean, default: true, description: "Whether to use PKCE on the OAuth2 login flow." }
+      roleMapping:
+        description: "OIDC group to Spark ACL mapping (keys admin_groups, history_admin_groups, modify_groups, view_groups)."
+        properties:
+          admin_groups: { type: array, items: { type: string } }
+          history_admin_groups: { type: array, items: { type: string } }
+          modify_groups: { type: array, items: { type: string } }
+          view_groups: { type: array, items: { type: string } }
+      config:
+        type: object
+        additionalProperties: true
+        properties: {}
+        description: "Spark History Server configuration entries merged as-is (e.g. spark.history.fs.logDirectory, cleaner, s3a and ui filter settings)."
   context:
     properties:
       platform:
@@ -56,6 +71,10 @@ schema:
             required: true
             properties:
               suffix: { type: string, required: true }
+          connections:
+            required: true
+            properties:
+              oidc: { type: connectionRef, interface: oidc, required: true }
 modules:
   - name: main
     timeout: 10m
@@ -67,59 +86,39 @@ modules:
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
       {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
-      
-      {{- $oidcId := .Context.sparkHistory.oidc.provider -}}
-      {{- $oidcProvider := (index .Context $oidcId).provider -}}
-      {{- $oidcRoleMapping := .Context.sparkHistory.oidc.roleMapping | default dict -}}
+
+      {{- $oidcIssuerUri := .Context.platform.connections.oidc.issuerUri -}}
+      {{- $oidcRoleMapping := .Parameters.roleMapping | default dict -}}
       {{- if not (kindIs "map" $oidcRoleMapping) }}
-        {{- fail "context.sparkHistory.oidc.roleMapping must be a map" -}}
+        {{- fail "parameters.roleMapping must be a map" -}}
       {{- end }}
       {{- $adminGroups := get $oidcRoleMapping "admin_groups" | default list -}}
       {{- $historyAdminGroups := get $oidcRoleMapping "history_admin_groups" | default list -}}
       {{- $modifyGroups := get $oidcRoleMapping "modify_groups" | default list -}}
       {{- $viewGroups := get $oidcRoleMapping "view_groups" | default list -}}
-      
-      {{- $oidcIssuerUri := $oidcProvider.issuerUri
-      | replace "{{ .Release.namespace }}" $namespace
-      | replace "{{ .Release.metadata.name }}" $release
-      | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      
-      {{- $storageId := .Context.sparkHistory.storage.provider -}}
-      {{- $storageProvider := (index .Context $storageId).provider -}}
-      
-      {{- $storageApiUrl := $storageProvider.endpoints.apiUrl
-          | replace "{{ .Release.namespace }}" $namespace
-          | replace "{{ .Release.metadata.name }}" $release
-          | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      {{- $hiveMetastoreUrl := .Context.hiveMetastore.endpoints.url
-          | replace "{{ .Release.namespace }}" $namespace
-          | replace "{{ .Release.metadata.name }}" $release
-          | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      
-      {{- $historyEndpoint := .Context.sparkHistory.endpoints.url 
-          | replace "{{ .Release.namespace }}" $namespace
-          | replace "{{ .Release.metadata.name }}" $release -}}
-      {{- $historyEndpointUrl := $historyEndpoint | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      {{- $historyEndpointHost := regexReplaceAll "^https?://" $historyEndpointUrl "" -}}
-      
-      {{- $historyEndpointScheme := regexFind "^https?://" $historyEndpointUrl | default "https://" -}}
-      {{- $webProxyEndpointUrl := printf "%s%s-%s.%s" $historyEndpointScheme .Parameters.webProxyUrlPrefix $namespace $domain -}}
-      
+
+      {{- $storageApiUrl := .Parameters.storage.apiUrl -}}
+
+      {{- $historyEndpointUrl := printf "https://spark-history-%s.%s" $namespace $domain -}}
+      {{- $historyEndpointHost := printf "spark-history-%s.%s" $namespace $domain -}}
+
+      {{- $webProxyEndpointUrl := printf "https://%s-%s.%s" .Parameters.webProxyUrlPrefix $namespace $domain -}}
+
       {{- $historyRedirectUri := $historyEndpointUrl -}}
-      
+
       {{- if .Parameters.enableWebProxy }}
       {{- $historyRedirectUri := $webProxyEndpointUrl -}}
       {{- end }}
-      {{- $sparkHistoryExtraConfig := (.Context.sparkHistory.config | default dict) -}}
+      {{- $sparkHistoryExtraConfig := (.Parameters.config | default dict) -}}
       {{- if not (kindIs "map" $sparkHistoryExtraConfig) }}
-        {{- fail "context.sparkHistory.config must be a map" -}}
+        {{- fail "parameters.config must be a map" -}}
       {{- end }}
-      
+
       image:
         repository: quay.io/okdp/spark
         pullPolicy: IfNotPresent
         tag: "spark-3.5.6-scala-2.12-java-17"
-      
+
       ingress:
         enabled: true
         ingressClassName: "nginx"
@@ -135,16 +134,16 @@ modules:
           - hosts:
               - {{ $historyEndpointHost }}
             secretName: {{ .Release.metadata.name }}-tls
-      
+
       config:
         spark.hadoop.fs.s3a.endpoint: {{ $storageApiUrl }}
         spark.io.okdp.spark.authc.OidcAuthFilter.param.issuer-uri: {{ $oidcIssuerUri }}
         spark.io.okdp.spark.authc.OidcAuthFilter.param.redirect-uri: {{ $historyRedirectUri }}/home
-        spark.io.okdp.spark.authc.OidcAuthFilter.param.scope: {{ .Context.sparkHistory.oidc.scope }}
+        spark.io.okdp.spark.authc.OidcAuthFilter.param.scope: {{ .Parameters.oidcScope }}
         spark.io.okdp.spark.authc.OidcAuthFilter.param.cookie-max-age-minutes: 480
         spark.io.okdp.spark.authc.OidcAuthFilter.param.cookie-cipher-secret-key: FC5E81345CED0E256DC42E410362FF6E
         spark.io.okdp.spark.authc.OidcAuthFilter.param.cookie-is-secure: true
-        spark.io.okdp.spark.authc.OidcAuthFilter.param.use-pkce: {{ .Context.sparkHistory.oidc.usePKCE }}
+        spark.io.okdp.spark.authc.OidcAuthFilter.param.use-pkce: {{ .Parameters.oidcUsePKCE }}
       {{- if gt (len $adminGroups) 0 }}
         # spark.admin.acls.groups
         spark.admin.acls.groups: {{ $adminGroups | join "," | quote }}
@@ -168,13 +167,13 @@ modules:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
-              name: {{ .Context.sparkHistory.storage.credentialsSecret.name }}
-              key: {{ .Context.sparkHistory.storage.credentialsSecret.accessKeyKey }}
+              name: {{ .Parameters.s3SecretRef }}
+              key: accessKey
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             secretKeyRef:
-              name: {{ .Context.sparkHistory.storage.credentialsSecret.name }}
-              key: {{ .Context.sparkHistory.storage.credentialsSecret.secretKeyKey }}
+              name: {{ .Parameters.s3SecretRef }}
+              key: secretKey
         # Disable Certificate Checking
         - name: SPARK_HISTORY_OPTS
           value: "-Dcom.amazonaws.sdk.disableCertChecking=true"
@@ -183,19 +182,19 @@ modules:
         - name: AUTH_CLIENT_ID
           valueFrom:
             secretKeyRef:
-              name: {{ .Context.sparkHistory.oidc.credentialsSecret.name }}
-              key: {{ .Context.sparkHistory.oidc.credentialsSecret.clientIdKey }}
+              name: {{ .Parameters.oidcClientSecretRef }}
+              key: client_id
         - name: AUTH_CLIENT_SECRET
           valueFrom:
             secretKeyRef:
-              name: {{ .Context.sparkHistory.oidc.credentialsSecret.name }}
-              key: {{ .Context.sparkHistory.oidc.credentialsSecret.clientSecretKey }}      
-      
+              name: {{ .Parameters.oidcClientSecretRef }}
+              key: client_secret
+
       extraVolumes:
         - name: cacerts
           secret:
             secretName: certs-bundle
-      
+
       extraVolumeMounts:
         - name: cacerts
           mountPath: /cacerts
@@ -211,12 +210,12 @@ modules:
     values: |
 
       {{- $webProxyEndpointHost := printf "%s-%s.%s" .Parameters.webProxyUrlPrefix .Release.spec.targetNamespace .Context.platform.ingress.suffix -}}
-      
+
       image:
         repository: quay.io/okdp/spark-web-proxy
         pullPolicy: IfNotPresent
         tag: "0.2.1"
-      
+
       configuration:
         spark:
           history:
@@ -225,7 +224,7 @@ modules:
             proxyBase: /sparkui
           jobNamespaces:
             - {{ .Release.spec.targetNamespace }}
-      
+
       ingress:
         enabled: true
         className: "nginx"
