@@ -174,12 +174,12 @@ modules:
         replicas: 1
         data:
           type: "persistentVolumeClaim"
-          storageClass: "{{ .Context.platform.storageClass.workspace }}"
+          storageClass: "{{ .Context.platform.storageClass.data }}"
           size: "{{ .Parameters.masterStorage }}Gi"
 
         logs:
           type: "persistentVolumeClaim"
-          storageClass: "{{ .Context.platform.storageClass.workspace }}"
+          storageClass: "{{ .Context.platform.storageClass.data }}"
           size: "{{ .Parameters.masterLogStorage }}Gi"
 
       volume:
@@ -188,7 +188,7 @@ modules:
         dataDirs:
           - name: data
             type: "persistentVolumeClaim"
-            storageClass: "{{ .Context.platform.storageClass.workspace }}"
+            storageClass: "{{ .Context.platform.storageClass.data }}"
             size: "{{ .Parameters.volumeStorage }}Gi"
             maxVolumes: 0
 
@@ -199,11 +199,11 @@ modules:
         port: 8888
         data:
           type: "persistentVolumeClaim"
-          storageClass: "{{ .Context.platform.storageClass.workspace }}"
+          storageClass: "{{ .Context.platform.storageClass.data }}"
           size: "{{ .Parameters.filerStorage }}Gi"
         logs:
           type: "persistentVolumeClaim"
-          storageClass: "{{ .Context.platform.storageClass.workspace }}"
+          storageClass: "{{ .Context.platform.storageClass.data }}"
           size: "{{ .Parameters.filerLogStorage }}Gi"
         ingress:
           enabled: true
