@@ -20,6 +20,13 @@ spec:
         type: string
         required: true
         description: "Secret with keys: username, password"
+      # Transport options, set when the server is declared by hand and reached
+      # over an untrusted network. A database published by a package on the
+      # cluster leaves them unset. The name differs by engine because the
+      # accepted values do: postgresql takes prefer/require/verify-ca/
+      # verify-full/disable, mysql takes false/preferred/true/skip-verify.
+      sslMode: { type: string }
+      tls: { type: string }
 ---
 apiVersion: kubocd.kubotal.io/v1alpha1
 kind: ClusterInterface
