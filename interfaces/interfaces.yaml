@@ -46,6 +46,11 @@ spec:
       secretRef:
         type: string
         description: "Secret with keys: accessKey, secretKey"
+      # Set when the store is declared by hand from the console. A store
+      # published by a package on the cluster leaves them unset: its consumers
+      # name their own bucket as an ordinary package parameter.
+      bucket: { type: string }
+      pathStyle: { type: boolean }
 ---
 apiVersion: kubocd.kubotal.io/v1alpha1
 kind: ClusterInterface
