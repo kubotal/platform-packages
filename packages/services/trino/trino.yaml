@@ -23,7 +23,7 @@ name: trino
 #tag: 480-p01
 # Currently, the UI requires the version to conform to SemVer (https://simversion.github.io/)
 # https://github.com/OKDP/okdp-ui/blob/main/src/app/shared/utils/utils.ts#L131
-tag: 480.0.0-cnx05
+tag: 480.0.0-cnx06
 protected: false
 description: |
   Apache Trino - Distributed SQL query engine designed for large-scale data processing across multiple data sources.
@@ -46,6 +46,7 @@ schema:
       icebergCatalog: { type: connectionRef, interface: iceberg-catalog, description: "Iceberg REST catalog (Polaris) exposed as a second catalog. Omit to run with the hive catalog only." }
       icebergCatalogName: { type: string, default: iceberg, description: "Name of the iceberg catalog." }
       icebergWarehouse: { type: string, description: "Polaris catalog used as the Iceberg warehouse. Defaults to the realm published on the connection." }
+      allowAuthOverHttp: { type: boolean, default: false, description: "Accept authenticated calls over plain HTTP. Needed by in-cluster clients that reach the coordinator service directly, such as Superset." }
       icebergOauth2Scope: { type: string, default: "PRINCIPAL_ROLE:ALL", description: "OAuth2 scope requested against the Iceberg REST catalog. Polaris rejects the connector default." }
       icebergOidcSecretRef: { type: string, description: "OAuth client Trino uses against the Iceberg REST catalog. Secret with keys: client_id, client_secret. Required when icebergCatalog is set." }
       numWorkers: { type: integer, default: 1, description: "Number of workers" }
@@ -409,6 +410,11 @@ modules:
           # - JWT: non-interactive bearer token authentication for automation/service accounts
           #   such as scripts, jobs, or CI/CD using --access-token
           http-server.authentication.type=jwt,oauth2
+          {{- if .Parameters.allowAuthOverHttp }}
+          # In-cluster clients reach the coordinator on plain HTTP; without this
+          # Trino answers 403 to any authenticated call that is not TLS.
+          http-server.authentication.allow-insecure-over-http=true
+          {{- end }}
           http-server.authentication.oauth2.issuer={{ $oidcIssuerUri }}
           http-server.authentication.oauth2.client-id=${ENV:TRINO_OAUTH_CLIENT_ID}
           http-server.authentication.oauth2.client-secret=${ENV:TRINO_OAUTH_CLIENT_SECRET}
