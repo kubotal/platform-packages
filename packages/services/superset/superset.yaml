@@ -21,7 +21,7 @@
 
 apiVersion: v1alpha1
 name: superset
-tag: 6.0.0-cnx02
+tag: 6.0.0-cnx05
 protected: false
 description: |
   Apache Superset - Enterprise business intelligence platform for modern data teams.
@@ -287,6 +287,51 @@ modules:
                 name: {{ .Parameters.examplesDb.secretRef }}
                 key: password
           {{- end }}
+
+        # The chart waits on the server TCP port, which says nothing about the
+        # databases existing: the schema upgrade then fails on a database not
+        # created yet, and the job burns its retries.
+        init:
+          initContainers:
+            - name: wait-for-databases
+              image: postgres:16-alpine
+              env:
+                - name: META_PW
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Parameters.metadataDb.secretRef }}
+                      key: password
+                - name: META_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Parameters.metadataDb.secretRef }}
+                      key: username
+                {{- if .Parameters.load_examples }}
+                - name: EX_PW
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Parameters.examplesDb.secretRef }}
+                      key: password
+                - name: EX_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Parameters.examplesDb.secretRef }}
+                      key: username
+                {{- end }}
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  until PGPASSWORD="$META_PW" psql -h {{ .Parameters.metadataDb.host }} -p {{ .Parameters.metadataDb.port }} -U "$META_USER" -d {{ .Parameters.metadataDb.dbName }} -c '\q' 2>/dev/null; do
+                    echo "waiting for database {{ .Parameters.metadataDb.dbName }}"; sleep 3
+                  done
+                  {{- if .Parameters.load_examples }}
+                  until PGPASSWORD="$EX_PW" psql -h {{ .Parameters.examplesDb.host }} -p {{ .Parameters.examplesDb.port }} -U "$EX_USER" -d {{ .Parameters.examplesDb.dbName }} -c '\q' 2>/dev/null; do
+                    echo "waiting for database {{ .Parameters.examplesDb.dbName }}"; sleep 3
+                  done
+                  {{- end }}
+                  echo "databases reachable"
+
         supersetNode:
           # Connections to an existing database and cache
           connections:
