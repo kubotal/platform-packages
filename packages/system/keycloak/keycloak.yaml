@@ -21,7 +21,7 @@
 
 apiVersion: v1alpha1
 name: keycloak
-tag: 24.4.11-cnx01
+tag: 24.4.11-cnx02
 protected: false
 description: |
   Keycloak identity and access management for Kubernetes
@@ -349,13 +349,11 @@ dependencies:
   - external-secrets
   - database-server
   - ingress
-outputs:
-  - name: oidc
-    connectionName: keycloak-oidc
-    interface: oidc
-    values:
-      issuerUri: "https://keycloak.{{ .Context.platform.ingress.suffix }}/realms/{{ .Parameters.realm.name }}"
-      authUrl: "https://keycloak.{{ .Context.platform.ingress.suffix }}/realms/{{ .Parameters.realm.name }}/protocol/openid-connect/auth"
-      tokenUrl: "https://keycloak.{{ .Context.platform.ingress.suffix }}/realms/{{ .Parameters.realm.name }}/protocol/openid-connect/token"
-      jwksUri: "https://keycloak.{{ .Context.platform.ingress.suffix }}/realms/{{ .Parameters.realm.name }}/protocol/openid-connect/certs"
-      userinfoUrl: "https://keycloak.{{ .Context.platform.ingress.suffix }}/realms/{{ .Parameters.realm.name }}/protocol/openid-connect/userinfo"
+# No outputs: keycloak publishes no connection.
+#
+# It used to publish keycloak-oidc, which made the platform's identity look
+# like something one service provides and others consume. It is not: keycloak
+# is the sandbox's provider, an enterprise IdP is deployed by nobody here, and
+# every service reads the same coordinates whichever it is. They live in the
+# platform Context under `oidc`, and this package is now just the thing that
+# happens to serve them in this sandbox.

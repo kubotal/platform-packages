@@ -16,11 +16,11 @@
 
 # Connections wiring: consumes db (interface database-server) and storage (interface s3)
 # as connectionRef parameters, plus the platform OIDC provider as the context variable
-# platform.connections.oidc. The S3 identity is the ordinary parameter s3SecretRef and
+# platform.oidc. The S3 identity is the ordinary parameter s3SecretRef and
 # the OAuth client is oidcClientSecretRef. Produces one iceberg-catalog Connection (output catalog).
 apiVersion: v1alpha1
 name: polaris
-tag: 1.3.0-incubating-cnx01
+tag: 1.3.0-incubating-cnx02
 protected: false
 description: |
   Apache Polaris is an open-source, fully-featured catalog for Apache Iceberg™.
@@ -54,10 +54,10 @@ schema:
       platform:
         required: true
         properties:
-          connections:
+          oidc:
             required: true
             properties:
-              oidc: { type: connectionRef, interface: oidc, required: true }
+              issuerUri: { type: string, required: true }
           certificateIssuers:
             required: true
             properties:
@@ -113,7 +113,7 @@ modules:
 
       {{- $databaseJdbcUrl := printf "jdbc:postgresql://%v:%v/%v" .Parameters.db.host .Parameters.db.port .Parameters.db.dbName -}}
 
-      {{- $oidcIssuerUri := .Context.platform.connections.oidc.issuerUri -}}
+      {{- $oidcIssuerUri := .Context.platform.oidc.issuerUri -}}
 
       {{- $polarisEndpointAPIUrl := printf "https://polaris-%s.%s" $namespace $domain -}}
       {{- $polarisEndpointAPIHost := regexReplaceAll "^https?://" $polarisEndpointAPIUrl "" -}}
@@ -341,7 +341,7 @@ modules:
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
 
-      {{- $oidcIssuerUri := .Context.platform.connections.oidc.issuerUri -}}
+      {{- $oidcIssuerUri := .Context.platform.oidc.issuerUri -}}
 
       {{- $polarisEndpointAPIUrl := printf "https://polaris-%s.%s" $namespace $domain -}}
 

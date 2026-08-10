@@ -23,7 +23,7 @@ name: trino
 #tag: 480-p01
 # Currently, the UI requires the version to conform to SemVer (https://simversion.github.io/)
 # https://github.com/OKDP/okdp-ui/blob/main/src/app/shared/utils/utils.ts#L131
-tag: 480.0.0-cnx01
+tag: 480.0.0-cnx02
 protected: false
 description: |
   Apache Trino - Distributed SQL query engine designed for large-scale data processing across multiple data sources.
@@ -70,10 +70,13 @@ schema:
             required: true
             properties:
               suffix: { type: string, required: true }
-          connections:
+          oidc:
             required: true
             properties:
-              oidc: { type: connectionRef, interface: oidc, required: true }
+              issuerUri: { type: string, required: true }
+              authUrl: { type: string, required: true }
+              tokenUrl: { type: string, required: true }
+              jwksUri: { type: string, required: true }
 
 modules:
   - name: opa
@@ -171,7 +174,7 @@ modules:
       {{- $release := printf "%v" .Release.metadata.name -}}
       {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
 
-      {{- $oidcIssuerUri := .Context.platform.connections.oidc.issuerUri -}}
+      {{- $oidcIssuerUri := .Context.platform.oidc.issuerUri -}}
 
       ttl_seconds: 30
       registration_url: "{{ $oidcIssuerUri }}/clients-registrations/openid-connect/"
@@ -212,10 +215,10 @@ modules:
       {{- $release := printf "%v" .Release.metadata.name -}}
       {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
 
-      {{- $oidcIssuerUri := .Context.platform.connections.oidc.issuerUri -}}
-      {{- $oidcAuthUrl := .Context.platform.connections.oidc.authUrl -}}
-      {{- $oidcTokenUrl := .Context.platform.connections.oidc.tokenUrl -}}
-      {{- $oidcJwksUrl := .Context.platform.connections.oidc.jwksUri -}}
+      {{- $oidcIssuerUri := .Context.platform.oidc.issuerUri -}}
+      {{- $oidcAuthUrl := .Context.platform.oidc.authUrl -}}
+      {{- $oidcTokenUrl := .Context.platform.oidc.tokenUrl -}}
+      {{- $oidcJwksUrl := .Context.platform.oidc.jwksUri -}}
 
       {{- $oidcScopes := .Parameters.oidcScope | replace " " "," -}}
 

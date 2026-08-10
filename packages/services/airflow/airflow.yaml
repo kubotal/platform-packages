@@ -1,10 +1,10 @@
 # Connections wiring: consumes db (interface database-server) as a connectionRef
 # parameter gating the metadata database, the chart reads the assembled connection
 # string Secret named by the metadataSecret parameter. OIDC comes from the platform
-# connection platform.connections.oidc, the OAuth client secret is a parameter.
+# connection platform.oidc, the OAuth client secret is a parameter.
 apiVersion: v1alpha1
 name: airflow
-tag: 3.2.1-cnx01
+tag: 3.2.1-cnx02
 protected: false
 description: |
   Apache Airflow 2.9.3 - Workflow orchestration platform with Spark Operator integration
@@ -34,9 +34,12 @@ schema:
             required: true
             properties:
               suffix: { type: string, required: true }
-          connections:
+          oidc:
+            required: true
             properties:
-              oidc: { type: connectionRef, interface: oidc, required: true }
+              issuerUri: { type: string, required: true }
+              authUrl: { type: string, required: true }
+              tokenUrl: { type: string, required: true }
   parameters:
     properties:
       db: { type: connectionRef, interface: database-server, required: true, description: "Connection to the SQL database server hosting the Airflow metadata database." }
@@ -76,7 +79,7 @@ modules:
       {{- $airflowOidcTokenUrl := "" }}
       {{- $airflowOidcIssuerUri := "" }}
       {{- if $airflowOidcEnabled }}
-        {{- $oidc := .Context.platform.connections.oidc -}}
+        {{- $oidc := .Context.platform.oidc -}}
         {{- $airflowOidcBaseUrl = printf "%s/protocol/openid-connect" $oidc.issuerUri -}}
         {{- $airflowOidcAuthUrl = $oidc.authUrl -}}
         {{- $airflowOidcTokenUrl = $oidc.tokenUrl -}}

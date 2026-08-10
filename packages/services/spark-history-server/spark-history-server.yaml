@@ -16,11 +16,11 @@
 
 # Connections wiring: the event log store is an s3 connectionRef parameter (storage),
 # the S3 identity is the ordinary parameter s3SecretRef (Secret keys accessKey/secretKey),
-# and the OIDC provider is a platform context variable (platform.connections.oidc).
+# and the OIDC provider is a platform context variable (platform.oidc).
 # The OAuth client of this instance is the ordinary parameter oidcClientSecretRef.
 apiVersion: v1alpha1
 name: spark-history-server
-tag: 3.5.1-cnx01
+tag: 3.5.1-cnx02
 protected: false
 description: |
   Spark History Server - Monitoring and debugging interface for Apache Spark applications.
@@ -71,10 +71,10 @@ schema:
             required: true
             properties:
               suffix: { type: string, required: true }
-          connections:
+          oidc:
             required: true
             properties:
-              oidc: { type: connectionRef, interface: oidc, required: true }
+              issuerUri: { type: string, required: true }
 modules:
   - name: main
     timeout: 10m
@@ -87,7 +87,7 @@ modules:
       {{- $release := printf "%v" .Release.metadata.name -}}
       {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
 
-      {{- $oidcIssuerUri := .Context.platform.connections.oidc.issuerUri -}}
+      {{- $oidcIssuerUri := .Context.platform.oidc.issuerUri -}}
       {{- $oidcRoleMapping := .Parameters.roleMapping | default dict -}}
       {{- if not (kindIs "map" $oidcRoleMapping) }}
         {{- fail "parameters.roleMapping must be a map" -}}

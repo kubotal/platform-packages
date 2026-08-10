@@ -21,7 +21,7 @@
 
 apiVersion: v1alpha1
 name: superset
-tag: 6.0.0-cnx01
+tag: 6.0.0-cnx02
 protected: false
 description: |
   Apache Superset - Enterprise business intelligence platform for modern data teams.
@@ -73,9 +73,10 @@ schema:
       platform:
         required: true
         properties:
-          connections:
+          oidc:
+            required: true
             properties:
-              oidc: { type: connectionRef, interface: oidc, required: true }
+              issuerUri: { type: string, required: true }
           certificateIssuers:
             required: true
             properties:
@@ -103,7 +104,7 @@ modules:
       {{- $examplesDatabaseJdbcUrl := printf "postgresql+psycopg2://$DB_EXAMPLES_USER:$DB_EXAMPLES_PASS@%s:%v/%s?options=-csearch_path%%3Dmain" .Parameters.examplesDb.host .Parameters.examplesDb.port .Parameters.examplesDb.dbName -}}
 
       {{- /* The oidc connection resolved from the platform context */ -}}
-      {{- $oidcBaseUrl := printf "%s/protocol/openid-connect" .Context.platform.connections.oidc.issuerUri -}}
+      {{- $oidcBaseUrl := printf "%s/protocol/openid-connect" .Context.platform.oidc.issuerUri -}}
 
       {{- $supersetOidcRoleMapping := .Parameters.oidcRoleMapping | default dict }}
 

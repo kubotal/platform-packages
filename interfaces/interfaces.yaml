@@ -55,22 +55,6 @@ spec:
 apiVersion: kubocd.kubotal.io/v1alpha1
 kind: ClusterInterface
 metadata:
-  name: oidc
-spec:
-  description: >-
-    OIDC provider (shared config). The OAuth client is PER consumer: each
-    consumer package takes its own client Secret as an ordinary parameter.
-  schema:
-    properties:
-      issuerUri: { type: string, required: true }
-      authUrl: { type: string, required: true }
-      tokenUrl: { type: string, required: true }
-      jwksUri: { type: string, required: true }
-      userinfoUrl: { type: string, required: true }
----
-apiVersion: kubocd.kubotal.io/v1alpha1
-kind: ClusterInterface
-metadata:
   name: hive
 spec:
   description: Hive metastore (thrift)

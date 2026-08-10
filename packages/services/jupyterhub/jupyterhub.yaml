@@ -17,11 +17,11 @@
 # Connections wiring: the file browser S3 store is a connectionRef parameter
 # (storage), the consumer S3 identity is the s3SecretRef parameter (keys
 # accessKey/secretKey) and the OIDC provider comes from the platform context
-# variable platform.connections.oidc. Other former context values are parameters.
+# variable platform.oidc. Other former context values are parameters.
 
 apiVersion: v1alpha1
 name: jupyterhub
-tag: 4.3.3-cnx01
+tag: 4.3.3-cnx02
 protected: false
 description: |
   JupyterHub - Multi-user interactive development environment for data science and machine learning.
@@ -104,10 +104,12 @@ schema:
             required: true
             properties:
               workspace: { type: string, required: true }
-          connections:
+          oidc:
             required: true
             properties:
-              oidc: { type: connectionRef, interface: oidc, required: true }
+              authUrl: { type: string, required: true }
+              tokenUrl: { type: string, required: true }
+              userinfoUrl: { type: string, required: true }
 modules:
   - name: spark-rbac
     timeout: 10m
@@ -141,11 +143,11 @@ modules:
 
       {{- $oidcName := .Parameters.oidcLoginService -}}
 
-      {{- $oidcAuthUrl := .Context.platform.connections.oidc.authUrl -}}
+      {{- $oidcAuthUrl := .Context.platform.oidc.authUrl -}}
 
-      {{- $oidcTokenUrl := .Context.platform.connections.oidc.tokenUrl -}}
+      {{- $oidcTokenUrl := .Context.platform.oidc.tokenUrl -}}
 
-      {{- $oidcUserInfoUrl := .Context.platform.connections.oidc.userinfoUrl -}}
+      {{- $oidcUserInfoUrl := .Context.platform.oidc.userinfoUrl -}}
 
       {{- $storageApiUrl := .Parameters.storage.apiUrl -}}
 
