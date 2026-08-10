@@ -21,7 +21,7 @@
 
 apiVersion: v1alpha1
 name: jupyterhub
-tag: 4.3.3-cnx02
+tag: 4.3.3-cnx03
 protected: false
 description: |
   JupyterHub - Multi-user interactive development environment for data science and machine learning.
@@ -41,8 +41,12 @@ schema:
       storage: { type: connectionRef, interface: s3, required: true }
       # This consumer's own S3 identity. Secret with keys: accessKey, secretKey.
       s3SecretRef: { type: string, required: true }
-      # OAuth client of this instance. Secret with keys: client_id, client_secret, JUPYTERHUB_CRYPT_KEY.
-      oidcClientSecretRef: { type: string, required: true }
+      # OAuth client of this instance. Secret with keys: client_id, client_secret,
+      # JUPYTERHUB_CRYPT_KEY. Required in the "existing" provisioning mode, where
+      # somebody else made it; left empty in the "kubauth" one, where this
+      # package generates the client itself and names the Secret after the
+      # release.
+      oidcClientSecretRef: { type: string }
       oidcLoginService: { type: string, default: "keycloak", description: "Display name of the OIDC provider on the login page (GenericOAuthenticator login_service)" }
       oidcRoleMapping:
         type: object
@@ -110,7 +114,35 @@ schema:
               authUrl: { type: string, required: true }
               tokenUrl: { type: string, required: true }
               userinfoUrl: { type: string, required: true }
+          # Who makes the OAuth client. In the kubauth mode this package
+          # generates it, in the existing one it is handed a Secret name.
+          identity:
+            required: true
+            properties:
+              clientProvisioning: { type: string, required: true }
+              kubauthNamespace: { type: string }
 modules:
+  # Provisions the OAuth client against kubauth. Off unless the platform says
+  # kubauth makes the clients: on a platform where somebody else does, posting
+  # an OidcClient would be inventing a client nobody asked for.
+  - name: oidc-client
+    enabled: "{{ eq .Context.platform.identity.clientProvisioning \"kubauth\" }}"
+    source:
+      local:
+        path: ../../../charts/oidc-client
+    values: |
+      clientName: "{{ .Release.metadata.name }}"
+      oidcNamespace: "{{ .Context.platform.identity.kubauthNamespace }}"
+      credentialsSecretName: "{{ .Release.metadata.name }}-oidc-creds"
+      # JupyterHub encrypts its auth state with this, and it is no more
+      # somebody else's business than the client secret is.
+      extraGeneratedKeys:
+        - JUPYTERHUB_CRYPT_KEY
+      redirectURIs:
+        - "https://{{ .Release.metadata.name }}.{{ .Context.platform.ingress.suffix }}/hub/oauth_callback"
+      displayName: "JupyterHub ({{ .Release.metadata.name }})"
+      description: "OIDC client for JupyterHub {{ .Release.metadata.name }}"
+
   - name: spark-rbac
     timeout: 10m
     source:
@@ -181,6 +213,16 @@ modules:
         {{- $_ := set $jupyterConnectionsByName $connection.name $connection -}}
       {{- end }}
 
+      {{/* The credentials Secret is the one named by the parameter when
+           somebody else made the client, and the one this package generated
+           when kubauth provisions it. Same keys either way, so everything
+           below reads it the same. */}}
+      {{- $oidcSecret := .Parameters.oidcClientSecretRef -}}
+      {{- if eq .Context.platform.identity.clientProvisioning "kubauth" -}}
+        {{- $oidcSecret = printf "%s-oidc-creds" .Release.metadata.name -}}
+      {{- else if not $oidcSecret -}}
+        {{- fail "oidcClientSecretRef is required unless platform.identity.clientProvisioning is kubauth" -}}
+      {{- end }}
       # Fix resource naming conflicts by using release name as prefix
       fullnameOverride: "{{ .Release.metadata.name }}"
       nameOverride: "{{ .Release.metadata.name }}"
@@ -190,17 +232,17 @@ modules:
           OAUTH_CLIENT_ID:
             valueFrom:
               secretKeyRef:
-                name: {{ .Parameters.oidcClientSecretRef }}
+                name: {{ $oidcSecret }}
                 key: client_id
           OAUTH_CLIENT_SECRET:
             valueFrom:
               secretKeyRef:
-                name: {{ .Parameters.oidcClientSecretRef }}
+                name: {{ $oidcSecret }}
                 key: client_secret
           JUPYTERHUB_CRYPT_KEY:
             valueFrom:
               secretKeyRef:
-                name: {{ .Parameters.oidcClientSecretRef }}
+                name: {{ $oidcSecret }}
                 key: JUPYTERHUB_CRYPT_KEY
         config:
           # https://oauthenticator.readthedocs.io/en/latest/how-to/refresh.html
