@@ -24,9 +24,8 @@ Packages are deployed through KuboCD **Releases** that reference layered **Conte
 ```
 packages/
 ├── system/             # Infrastructure & system packages
-│   ├── okdp-server/
-│   ├── okdp-ui/
 │   ├── keycloak/
+│   ├── cnpg-postgresql/
 │   └── ...
 └── services/           # Services
     ├── superset/
@@ -49,7 +48,7 @@ The OCI repository packages are published to is defined once in [`platform-packa
 
 ```bash
 # Build a system package
-kubocd package ./packages/system/okdp-server/okdp-server.yaml --ociRepoPrefix quay.io/okdp/platform-packages
+kubocd package ./packages/system/keycloak/keycloak.yaml --ociRepoPrefix quay.io/okdp/platform-packages
 
 # Build a service package
 kubocd package ./packages/services/superset/superset.yaml --ociRepoPrefix quay.io/okdp/platform-packages
@@ -59,7 +58,7 @@ kubocd package ./packages/services/superset/superset.yaml --ociRepoPrefix quay.i
 
 ```bash
 # Using a different OCI registry
-kubocd package ./packages/system/okdp-server/okdp-server.yaml --ociRepoPrefix myregistry.io/my-org/packages
+kubocd package ./packages/system/keycloak/keycloak.yaml --ociRepoPrefix myregistry.io/my-org/packages
 
 # Using a different prefix for packages
 kubocd package ./packages/services/jupyterhub/jupyterhub.yaml --ociRepoPrefix harbor.company.com/okdp-prod
