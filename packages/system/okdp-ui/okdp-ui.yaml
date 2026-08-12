@@ -16,112 +16,76 @@
 
 apiVersion: v1alpha1
 name: okdp-ui
-tag: 0.4.1-p02
+tag: 0.6.0-cnx01
 protected: false
 description: |
   OKDP UI - Frontend web interface for the Open Kubernetes Data Platform
 usage:
   text: |
-    OKDP UI provides the web interface for the OKDP platform.
-    Access the UI at https://okdp-ui.{{ .Context.platform.ingress.suffix }}
+    Access the console at
+    https://{{ .Parameters.host | default (printf "okdp-ui.%s" .Context.platform.ingress.suffix) }}
+    The same ingress routes /api to the okdp-server Service, so the browser
+    never leaves the origin and the API is never exposed on its own host.
+schema:
+  parameters:
+    properties:
+      imageRepository: { type: string, default: "quay.io/okdp/images/okdp-ui", description: "Console image repository." }
+      imageTag: { type: string, default: "", description: "Console image tag. Empty means the chart appVersion." }
+      host: { type: string, description: "Console host. Defaults to okdp-ui.<ingress suffix>." }
+      oidcAuthority: { type: string, required: true, description: "Issuer the console redirects to, injected at container start rather than baked into the bundle." }
+      oidcClientId: { type: string, default: "okdp-ui" }
+      rolesClaim: { type: string, default: "groups", description: "Claim of the ID token carrying the caller's roles. Dotted paths are resolved. Keycloak keeps realm_access out of the ID token, hence groups." }
+      adminRole: { type: string, default: "platform_admin", description: "Role that opens the administration screens." }
+      backendService: { type: string, default: "okdp-server-main", description: "In-cluster Service the ingress routes /api to. KuboCD names a Service <release>-<module>, hence the -main suffix when the server Release is named okdp-server." }
+      backendPort: { type: integer, default: 8093 }
+  context:
+    properties:
+      platform:
+        required: true
+        properties:
+          ingress:
+            required: true
+            properties:
+              suffix: { type: string, required: true }
+          certificateIssuers:
+            required: true
+            properties:
+              selfSigned:
+                properties:
+                  name: { type: string, required: true }
 modules:
   - name: main
     timeout: 10m
     source:
-      oci:
-        repository: quay.io/okdp/charts/okdp-ui
-        tag: 0.4.1
+      local:
+        path: ../../../charts/okdp-ui
     values: |
-      
-      {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
-      {{- $release := printf "%v" .Release.metadata.name -}}
       {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
-      
-      {{- $oidcId := .Context.platform.portal.oidc.provider -}}
-      {{- $oidcProvider := (index .Context $oidcId).provider -}}
-      
-      {{- $oidcIssuerUri := $oidcProvider.issuerUri
-            | replace "{{ .Release.namespace }}" $namespace
-            | replace "{{ .Release.metadata.name }}" $release
-            | replace "{{ .Context.ingress.suffix }}" $domain -}} 
-      
-      replicaCount: 1
+      {{- $host := .Parameters.host | default (printf "okdp-ui.%s" $domain) -}}
 
       image:
-        repository: quay.io/okdp/okdp-ui
-        pullPolicy: Always
-        tag: 0.4.1
+        repository: {{ .Parameters.imageRepository | quote }}
+        tag: {{ .Parameters.imageTag | quote }}
 
-      ui:
-        auth:
-          provider: oauth2
-          oauth2:
-            issuer: {{ $oidcIssuerUri }}
-            redirectUri: https://okdp-ui.{{ .Context.platform.ingress.suffix }}/index.html
-            silentRefreshRedirectUri: https://okdp-ui.{{ .Context.platform.ingress.suffix }}/silent-refresh.html
-            clientId: okdp-ui
-            responseType: code
-            scope: openid profile email offline_access roles
-            showDebugInformation: true
-        okdpApi:
-          apiUrl: https://okdp-server.{{ .Context.platform.ingress.suffix }}/api/v1
-          swaggerUrl: https://okdp-server.{{ .Context.platform.ingress.suffix }}/swagger
-        submission:
-          mode: kubernetes
-        catalogs:
-          services:
-            {{ toYaml .Context.platform.portal.services | nindent 6 }}
-          kad:
-            - all
-        
-        kadCatalogsInfo:
-          {{ toYaml .Context.platform.portal.kadCatalogsInfo | nindent 4 }}
-        
-        kadServicesInfo:
-          {{ toYaml .Context.platform.portal.kadServicesInfo | nindent 4 }}
-      
-      service:
-        type: ClusterIP
-        port: 4200
+      backend:
+        service: {{ .Parameters.backendService | quote }}
+        port: {{ .Parameters.backendPort }}
+
+      oidc:
+        authority: {{ .Parameters.oidcAuthority | quote }}
+        clientId: {{ .Parameters.oidcClientId | quote }}
+
+      identity:
+        rolesClaim: {{ .Parameters.rolesClaim | quote }}
+        adminRole: {{ .Parameters.adminRole | quote }}
 
       ingress:
-        enabled: true
-        className: "nginx"
-        annotations:
-          cert-manager.io/cluster-issuer: "{{ .Context.platform.certificateIssuers.selfSigned.name }}"
-          nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-          nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-          nginx.ingress.kubernetes.io/use-regex: "true"          
-        tls:
-          - secretName: okdp-ui-tls
-            hosts:
-              - okdp-ui.{{ .Context.platform.ingress.suffix }}
-        hosts:
-          - host: okdp-ui.{{ .Context.platform.ingress.suffix }}
-            paths:
-            - path: "/"
-              pathType: ImplementationSpecific
-              backend:
-                service:
-                  name: okdp-ui-main
-                  port:
-                    number: 4200
-      resources: {}
-
-      livenessProbe:
-        httpGet:
-          path: /
-          port: http
-        initialDelaySeconds: 60
-        periodSeconds: 30
-        timeoutSeconds: 10
-
-      readinessProbe:
-        httpGet:
-          path: /
-          port: http
-
+        className: nginx
+        host: {{ $host | quote }}
+        clusterIssuer: {{ .Context.platform.certificateIssuers.selfSigned.name | quote }}
+        tlsSecretName: okdp-ui-tls
 roles:
   - okdp-ui
 dependencies:
   - okdp-server
+  - ingress

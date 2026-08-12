@@ -1,0 +1,44 @@
+replicaCount: 1
+
+image:
+  repository: quay.io/okdp/images/okdp-ui
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# In-cluster okdp-server Service. The ingress routes /api to it so the browser
+# stays same-origin (no CORS). Must resolve in the release namespace.
+backend:
+  service: okdp-server
+  port: 8093
+
+# OIDC provider the console redirects to. Injected at container startup, not
+# baked into the bundle, so one image serves any cluster.
+oidc:
+  authority: ""
+  clientId: okdp-ui
+
+# Which claim of the ID token carries the caller's roles, and which role opens
+# the administration screens.
+#
+# It must be a claim of the ID token, not of the access token: the console reads
+# the profile oidc-client-ts builds from the ID token. Keycloak keeps its realm
+# roles (realm_access.roles) out of the ID token, so the default points at the
+# groups claim, which OKDP realms publish with the same values. A dotted path is
+# resolved for a provider that nests them.
+identity:
+  rolesClaim: groups
+  adminRole: platform_admin
+
+service:
+  type: ClusterIP
+  port: 4200
+
+# Public exposure of the console.
+ingress:
+  className: nginx
+  host: console.okdp.sandbox
+  clusterIssuer: default-issuer
+  tlsSecretName: okdp-ui-tls
+
+resources: {}
