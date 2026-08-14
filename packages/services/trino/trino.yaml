@@ -36,14 +36,14 @@ usage:
 schema:
   parameters:
     properties:
-      metastore: { type: connectionRef, interface: hive, required: true, description: "Hive metastore connection backing the hive catalog." }
-      storage: { type: connectionRef, interface: s3, required: true, description: "S3 object store connection backing the hive catalog." }
+      metastore: { type: connectionRef, connectionType: hive, required: true, description: "Hive metastore connection backing the hive catalog." }
+      storage: { type: connectionRef, connectionType: s3, required: true, description: "S3 object store connection backing the hive catalog." }
       s3SecretRef: { type: string, required: true, description: "This instance's own S3 identity. Secret with keys: accessKey, secretKey." }
       oidcClientSecretRef: { type: string, required: true, description: "OAuth client of this instance. Secret with keys: client_id, client_secret. Ignored when enableDCR is true." }
       sharedSecretRef: { type: string, required: true, description: "Trino internal communication shared secret. Secret with key: shared-secret." }
       oidcScope: { type: string, default: "openid profile email groups", description: "Scopes requested on the OAuth2 login flow." }
       hiveCatalog: { type: string, default: hive, description: "Name of the hive catalog." }
-      icebergCatalog: { type: connectionRef, interface: iceberg-catalog, description: "Iceberg REST catalog (Polaris) exposed as a second catalog. Omit to run with the hive catalog only." }
+      icebergCatalog: { type: connectionRef, connectionType: iceberg-catalog, description: "Iceberg REST catalog (Polaris) exposed as a second catalog. Omit to run with the hive catalog only." }
       icebergCatalogName: { type: string, default: iceberg, description: "Name of the iceberg catalog." }
       icebergWarehouse: { type: string, description: "Polaris catalog used as the Iceberg warehouse. Defaults to the realm published on the connection." }
       allowAuthOverHttp: { type: boolean, default: false, description: "Accept authenticated calls over plain HTTP. Needed by in-cluster clients that reach the coordinator service directly, such as Superset." }
@@ -444,7 +444,7 @@ outputs:
   # One trino Connection per instance, named 'kcd-<release>-endpoint'. Two
   # releases of this package = two distinct Connections.
   - name: endpoint
-    interface: trino
+    connectionType: trino
     values:
       url: "https://trino-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}"
       uri: "trino://trino@trino-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}"

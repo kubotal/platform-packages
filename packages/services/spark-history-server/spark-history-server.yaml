@@ -39,7 +39,7 @@ schema:
     properties:
       enableWebProxy: { type: boolean, default: true, description: "Whether to enable Spark History web proxy" }
       webProxyUrlPrefix: { type: string, default: "spark-web-proxy", description: "Spark web proxy url prefix" }
-      storage: { type: connectionRef, interface: s3, required: true, description: "Connection to the S3-compatible object store holding the Spark event logs." }
+      storage: { type: connectionRef, connectionType: s3, required: true, description: "Connection to the S3-compatible object store holding the Spark event logs." }
       s3SecretRef: { type: string, required: true, description: "Secret with keys accessKey/secretKey, this consumer's own S3 identity." }
       oidcClientSecretRef: { type: string, required: true, description: "OAuth client of this instance. Secret with keys: client_id, client_secret." }
       oidcScope: { type: string, default: "openid+profile+email+offline_access+groups", description: "Scopes requested on the OAuth2 login flow." }

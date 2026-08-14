@@ -268,7 +268,7 @@ modules:
 # bring their own identity as a package parameter, not via the Connection.
 outputs: |
   - name: s3
-    interface: s3
+    connectionType: s3
     values:
       apiUrl: "https://{{ .Release.metadata.name }}-{{ .Release.spec.targetNamespace }}-api.{{ .Context.platform.ingress.suffix }}"
       internalUrl: "http://{{ .Release.metadata.name }}-s3.{{ .Release.spec.targetNamespace }}.svc.cluster.local:8333"

@@ -35,8 +35,8 @@ schema:
     properties:
       memoryGi: { type: number, default: 0.5, multipleOf: 0.25, description: "Memory (GiB) used for Kubernetes requests/limits (recommended: request=limit)." }
       cpu: { type: number, default: 0.5, multipleOf: 0.25, description: "CPU request in millicores (e.g., 500=0.5 vCPU, 1000=1 vCPU)." }
-      db: { type: connectionRef, interface: database-server, required: true, description: "Connection to the SQL database hosting the metastore schema." }
-      storage: { type: connectionRef, interface: s3, required: true, description: "Connection to the S3-compatible object store hosting the warehouse." }
+      db: { type: connectionRef, connectionType: database-server, required: true, description: "Connection to the SQL database hosting the metastore schema." }
+      storage: { type: connectionRef, connectionType: s3, required: true, description: "Connection to the S3-compatible object store hosting the warehouse." }
       s3SecretRef: { type: string, required: true, description: "Secret with keys accessKey/secretKey, this consumer's own S3 identity." }
       warehouseBucket: { type: string, default: hive, description: "S3 bucket used as the warehouse directory." }
 modules:
@@ -100,7 +100,7 @@ modules:
           memory: "{{ mulf (float64 .Parameters.memoryGi) 2 }}Gi"
 outputs:
   - name: metastore
-    interface: hive
+    connectionType: hive
     values:
       thriftUri: "thrift://{{ .Release.metadata.name }}.{{ .Release.spec.targetNamespace }}.svc.cluster.local:9083"
 roles:

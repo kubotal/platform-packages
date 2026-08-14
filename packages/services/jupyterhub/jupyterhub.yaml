@@ -38,7 +38,7 @@ schema:
       memoryGi: { type: number, default: 1, multipleOf: 0.25, description: "Notebook (singleuser) pod memory (GiB) for requests/limits." }
       cpu:      { type: number, default: 0.5, multipleOf: 0.25, description: "Notebook (singleuser) pod CPU (vCPU) for requests/limits." }
       # The S3 store backing the jupyter-fs file browser.
-      storage: { type: connectionRef, interface: s3, required: true }
+      storage: { type: connectionRef, connectionType: s3, required: true }
       # This consumer's own S3 identity. Secret with keys: accessKey, secretKey.
       s3SecretRef: { type: string, required: true }
       # OAuth client of this instance. Secret with keys: client_id, client_secret,
