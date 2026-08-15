@@ -24,8 +24,9 @@ Packages are deployed through KuboCD **Releases** that reference layered **Conte
 ```
 packages/
 ├── system/             # Infrastructure & system packages
-│   ├── keycloak/
 │   ├── cnpg-postgresql/
+│   ├── okdp-server/
+│   ├── okdp-ui/
 │   └── ...
 └── services/           # Services
     ├── superset/
