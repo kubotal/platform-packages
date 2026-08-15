@@ -33,7 +33,8 @@ schema:
   parameters:
     properties:
       username: { type: string, required: true, default: "admin" }
-      password: { type: string, required: true, default: "admin123" }
+      # Pas de defaut: un mot de passe livre avec le package part en production.
+      password: { type: string, required: true, minLength: 8 }
       volumeReplicas: { type: integer, required: true, default: 1 }
       masterStorage: { type: string, required: true, default: "1" }
       masterLogStorage: { type: string, required: true, default: "0.5" }
