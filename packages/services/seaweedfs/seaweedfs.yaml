@@ -262,7 +262,7 @@ modules:
               hosts:
               - {{ $seaweedfsS3Host }}
 
-# Connection 'kcd-<release>-s3' (interface s3). apiUrl is the external ingress
+# Connection 'kcd-<release>-s3' (connection type s3). apiUrl is the external ingress
 # URL, internalUrl the in-cluster service URL. secretRef is the store admin
 # identity, picked from the admin item of the identities parameter. Consumers
 # bring their own identity as a package parameter, not via the Connection.

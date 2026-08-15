@@ -15,8 +15,8 @@
 #
 
 # Connections wiring: the metadata and examples databases are connectionRef
-# parameters (interface database-server), the OIDC provider is a platform
-# context connection (interface oidc, OAuth clients stay ordinary Secret name
+# parameters (connection type database-server), the OIDC provider is a platform
+# context connection (connection type oidc, OAuth clients stay ordinary Secret name
 # parameters), and trino datasources are a list of per item connectionRefs.
 
 apiVersion: v1alpha1

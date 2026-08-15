@@ -14,7 +14,7 @@
 #  limitations under the License.
 #
 
-# Connections wiring: consumes db (interface database-server) and storage (interface s3)
+# Connections wiring: consumes db (connection type database-server) and storage (connection type s3)
 # as connectionRef parameters, plus the platform OIDC provider as the context variable
 # platform.oidc. The S3 identity is the ordinary parameter s3SecretRef and
 # the OAuth client is oidcClientSecretRef. Produces one iceberg-catalog Connection (output catalog).

@@ -1,4 +1,4 @@
-# Connections wiring: consumes db (interface database-server) as a connectionRef
+# Connections wiring: consumes db (connection type database-server) as a connectionRef
 # parameter gating the metadata database, the chart reads the assembled connection
 # string Secret named by the metadataSecret parameter. OIDC comes from the platform
 # connection platform.oidc, the OAuth client secret is a parameter.
