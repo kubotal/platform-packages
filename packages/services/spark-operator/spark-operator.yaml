@@ -53,8 +53,6 @@ usage:
 schema:
   parameters:
     properties:
-      # Repris de l'ancien package: les trois reglages du controleur, revenus
-      # aux defauts du chart amont a la reecriture.
       controllerReplicas: { type: integer, default: 1, title: "Controller | Replicas | stepper | order:1" }
       controllerLogLevel: { type: string, default: "info", enum: ["debug", "info", "warn", "error"], title: "Controller | Log level | | order:2" }
       controllerWorkers: { type: integer, default: 10, title: "Controller | Workers | stepper | order:3 advanced:true" }

@@ -38,8 +38,6 @@ schema:
   parameters:
     properties:
       enableWebProxy: { type: boolean, default: true, title: "Cluster | Enable web proxy | | order:1", description: "Whether to enable Spark History web proxy" }
-      # Repris de l'ancien package: le dimensionnement du history server etait
-      # reglable, il tourne aujourd'hui sur les defauts du chart.
       resourceCpu: { type: string, default: "500m", title: "Resources | CPU limit | | order:2 columns:2 advanced:true placeholder:\"e.g. 500m, 1\"" }
       resourceMemory: { type: string, default: "1Gi", title: "Resources | Memory limit | | order:1 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
       webProxyUrlPrefix: { title: "Cluster | Web proxy URL prefix | | order:2 advanced:true condition:enableWebProxy=true", type: string, default: "spark-web-proxy", description: "Spark web proxy url prefix" }

@@ -37,8 +37,6 @@ schema:
       startTimeout: { type: integer, default: 600, title: "Notebooks | Start timeout | stepper | order:3 advanced:true", description: "Maximum number of seconds JupyterHub will wait for a user’s server to become reachable" }
       memoryGi: { type: number, default: 1, multipleOf: 0.25, title: "Notebooks | Memory (GiB) | | order:2 columns:2", description: "Notebook (singleuser) pod memory (GiB) for requests/limits." }
       cpu:      { type: number, default: 0.5, multipleOf: 0.25, title: "Notebooks | CPU (vCPU) | | order:1 columns:2", description: "Notebook (singleuser) pod CPU (vCPU) for requests/limits." }
-      # Dimensionnement du hub et du proxy, repris de l'ancien package: sans eux
-      # les deux composants de controle tournent sur les defauts du chart amont.
       hubCpuRequest:      { type: string, default: "100m",  title: "Resources | Hub CPU request | | order:1 columns:2 advanced:true placeholder:\"e.g. 100m, 500m\"" }
       hubCpuLimit:        { type: string, default: "1",     title: "Resources | Hub CPU limit | | order:2 columns:2 advanced:true placeholder:\"e.g. 500m, 1\"" }
       hubMemoryRequest:   { type: string, default: "512Mi", title: "Resources | Hub memory request | | order:3 columns:2 advanced:true placeholder:\"e.g. 512Mi, 1Gi\"" }

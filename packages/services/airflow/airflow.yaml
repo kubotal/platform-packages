@@ -45,8 +45,6 @@ schema:
       db: { type: connectionRef, connectionType: database-server, required: true, title: "Cluster | Metadata database | | order:2", description: "Connection to the SQL database server hosting the Airflow metadata database." }
       metadataSecret: { type: string, required: true, title: "Cluster | Metadata connection secret | | order:3", description: "Secret with key connection holding the full SQLAlchemy connection string." }
       securitySecretRef: { type: string, required: true, title: "Cluster | Security secret | | order:4", description: "Secret holding the api secret key, JWT secret and fernet key." }
-      # Repris de l'ancien package, ou l'executor et le dimensionnement des deux
-      # composants de controle etaient reglables et sont revenus en dur ici.
       executor: { type: string, default: "KubernetesExecutor", enum: ["KubernetesExecutor", "CeleryExecutor", "LocalExecutor"], title: "Cluster | Executor | | order:1" }
       schedulerMemory: { type: string, default: "1024Mi", title: "Resources | Scheduler memory limit | | order:1 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
       webserverMemory: { type: string, default: "1024Mi", title: "Resources | API server memory limit | | order:2 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }

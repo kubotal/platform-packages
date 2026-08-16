@@ -32,7 +32,6 @@ schema:
   parameters:
     properties:
       purge: { type: boolean, default: false, title: "Catalog | Purge realms | | order:3 advanced:true", description: "Whether to purge realms and all associated entities." }
-      # Repris de l'ancien package: la limite memoire etait reglable.
       memory: { type: string, default: "1Gi", title: "Resources | Memory limit | | order:1 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
       db: { title: "Catalog | Metadata database | | order:1", type: connectionRef, connectionType: database-server, required: true, description: "Connection to the PostgreSQL server hosting the Polaris metastore database." }
       storage: { title: "Storage | Object store | | order:1", type: connectionRef, connectionType: s3, required: true, description: "Connection to the S3-compatible object store backing the catalogs." }

@@ -35,8 +35,6 @@ schema:
   parameters:
     properties:
       load_examples: { type: boolean, default: true, title: "Cluster | Load examples | | order:2", description: "Whether to load superset examples" }
-      # Repris de l'ancien package: le compte d'amorcage et le dimensionnement
-      # du noeud Superset etaient reglables et sont revenus aux defauts du chart.
       adminUser: { type: string, default: "admin", title: "Admin | Username | | order:1" }
       memory: { type: string, default: "2Gi", title: "Resources | Memory | | order:1 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
       cpu: { type: string, default: "500m", title: "Resources | CPU | | order:2 columns:2 advanced:true placeholder:\"e.g. 500m, 1\"" }
