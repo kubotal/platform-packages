@@ -40,9 +40,9 @@ schema:
       cpu: { type: string, default: "500m", title: "Resources | CPU | | order:2 columns:2 advanced:true placeholder:\"e.g. 500m, 1\"" }
       workers: { type: integer, default: 2, title: "Resources | Gunicorn workers | stepper | order:3 advanced:true" }
       # Superset metadata database
-      metadataDb: { type: connectionRef, connectionType: database-server, required: true, title: "Cluster | Metadata database | | order:1" }
+      metadataDb: { type: connectionRef, contract: database-server, required: true, title: "Cluster | Metadata database | | order:1" }
       # Database hosting the superset examples (used when load_examples is true)
-      examplesDb: { title: "Cluster | Examples database | | order:3", type: connectionRef, connectionType: database-server, required: true }
+      examplesDb: { title: "Cluster | Examples database | | order:3", type: connectionRef, contract: database-server, required: true }
       # Secret Key for Superset's Flask App. Secret with key: superset_secret_key
       secretKeyRef: { title: "Cluster | Flask secret key | | order:4", type: string, required: true }
       # External redis. Host defaults to the redis bundled by the chart
@@ -71,7 +71,7 @@ schema:
         items:
           properties:
             name: { type: string, required: true }
-            trino: { type: connectionRef, connectionType: trino, required: true }
+            trino: { type: connectionRef, contract: trino, required: true }
             catalog: { type: string, default: hive }
   context:
     properties:

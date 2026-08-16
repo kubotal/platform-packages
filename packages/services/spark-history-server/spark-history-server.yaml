@@ -41,7 +41,7 @@ schema:
       resourceCpu: { type: string, default: "500m", title: "Resources | CPU limit | | order:2 columns:2 advanced:true placeholder:\"e.g. 500m, 1\"" }
       resourceMemory: { type: string, default: "1Gi", title: "Resources | Memory limit | | order:1 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
       webProxyUrlPrefix: { title: "Cluster | Web proxy URL prefix | | order:2 advanced:true condition:enableWebProxy=true", type: string, default: "spark-web-proxy", description: "Spark web proxy url prefix" }
-      storage: { title: "Storage | Event log store | | order:1", type: connectionRef, connectionType: s3, required: true, description: "Connection to the S3-compatible object store holding the Spark event logs." }
+      storage: { title: "Storage | Event log store | | order:1", type: connectionRef, contract: s3, required: true, description: "Connection to the S3-compatible object store holding the Spark event logs." }
       s3SecretRef: { title: "Storage | S3 credentials secret | | order:2", type: string, required: true, description: "Secret with keys accessKey/secretKey, this consumer's own S3 identity." }
       oidcClientSecretRef: { title: "Authentication | OIDC client secret | | order:1", type: string, required: true, description: "OAuth client of this instance. Secret with keys: client_id, client_secret." }
       oidcScope: { title: "Authentication | Scopes | | order:2 advanced:true", type: string, default: "openid+profile+email+offline_access+groups", description: "Scopes requested on the OAuth2 login flow." }

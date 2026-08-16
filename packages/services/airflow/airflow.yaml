@@ -42,7 +42,7 @@ schema:
               tokenUrl: { type: string, required: true }
   parameters:
     properties:
-      db: { type: connectionRef, connectionType: database-server, required: true, title: "Cluster | Metadata database | | order:2", description: "Connection to the SQL database server hosting the Airflow metadata database." }
+      db: { type: connectionRef, contract: database-server, required: true, title: "Cluster | Metadata database | | order:2", description: "Connection to the SQL database server hosting the Airflow metadata database." }
       metadataSecret: { type: string, required: true, title: "Cluster | Metadata connection secret | | order:3", description: "Secret with key connection holding the full SQLAlchemy connection string." }
       securitySecretRef: { type: string, required: true, title: "Cluster | Security secret | | order:4", description: "Secret holding the api secret key, JWT secret and fernet key." }
       # CeleryExecutor is left out: it needs a broker and workers, and this package

@@ -36,14 +36,14 @@ usage:
 schema:
   parameters:
     properties:
-      metastore: { title: "Catalogs | Hive metastore | | order:1", type: connectionRef, connectionType: hive, required: true, description: "Hive metastore connection backing the hive catalog." }
-      storage: { title: "Catalogs | Object store | | order:2", type: connectionRef, connectionType: s3, required: true, description: "S3 object store connection backing the hive catalog." }
+      metastore: { title: "Catalogs | Hive metastore | | order:1", type: connectionRef, contract: hive, required: true, description: "Hive metastore connection backing the hive catalog." }
+      storage: { title: "Catalogs | Object store | | order:2", type: connectionRef, contract: s3, required: true, description: "S3 object store connection backing the hive catalog." }
       s3SecretRef: { title: "Catalogs | S3 credentials secret | | order:3", type: string, required: true, description: "This instance's own S3 identity. Secret with keys: accessKey, secretKey." }
       oidcClientSecretRef: { title: "Authentication | OIDC client secret | | order:1", type: string, required: true, description: "OAuth client of this instance. Secret with keys: client_id, client_secret. Ignored when enableDCR is true." }
       sharedSecretRef: { title: "Authentication | Internal shared secret | | order:3", type: string, required: true, description: "Trino internal communication shared secret. Secret with key: shared-secret." }
       oidcScope: { title: "Authentication | Scopes | | order:2 advanced:true", type: string, default: "openid profile email groups", description: "Scopes requested on the OAuth2 login flow." }
       hiveCatalog: { title: "Catalogs | Hive catalog name | | order:4 columns:2", type: string, default: hive, description: "Name of the hive catalog." }
-      icebergCatalog: { title: "Catalogs | Iceberg REST catalog | | order:5", type: connectionRef, connectionType: iceberg-catalog, description: "Iceberg REST catalog (Polaris) exposed as a second catalog. Omit to run with the hive catalog only." }
+      icebergCatalog: { title: "Catalogs | Iceberg REST catalog | | order:5", type: connectionRef, contract: iceberg-catalog, description: "Iceberg REST catalog (Polaris) exposed as a second catalog. Omit to run with the hive catalog only." }
       icebergCatalogName: { title: "Catalogs | Iceberg catalog name | | order:6 columns:2", type: string, default: iceberg, description: "Name of the iceberg catalog." }
       icebergWarehouse: { title: "Catalogs | Iceberg warehouse | | order:7 columns:2 advanced:true", type: string, description: "Polaris catalog used as the Iceberg warehouse. Defaults to the realm published on the connection." }
       allowAuthOverHttp: { title: "Authentication | Allow auth over HTTP | | order:7 advanced:true", type: boolean, default: false, description: "Accept authenticated calls over plain HTTP. Needed by in-cluster clients that reach the coordinator service directly, such as Superset." }
@@ -466,7 +466,7 @@ outputs:
   # One trino Connection per instance, named 'kcd-<release>-endpoint'. Two
   # releases of this package = two distinct Connections.
   - name: endpoint
-    connectionType: trino
+    contract: trino
     values:
       url: "https://trino-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}"
       uri: "trino://trino@trino-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}"

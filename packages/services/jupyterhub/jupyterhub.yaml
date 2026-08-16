@@ -46,7 +46,7 @@ schema:
       proxyMemoryRequest: { type: string, default: "128Mi", title: "Resources | Proxy memory request | | order:7 columns:2 advanced:true placeholder:\"e.g. 128Mi, 256Mi\"" }
       proxyMemoryLimit:   { type: string, default: "512Mi", title: "Resources | Proxy memory limit | | order:8 columns:2 advanced:true placeholder:\"e.g. 512Mi, 1Gi\"" }
       # The S3 store backing the jupyter-fs file browser.
-      storage: { type: connectionRef, connectionType: s3, required: true, title: "Storage | Object store | | order:1" }
+      storage: { type: connectionRef, contract: s3, required: true, title: "Storage | Object store | | order:1" }
       # This consumer's own S3 identity. Secret with keys: accessKey, secretKey.
       s3SecretRef: { type: string, required: true, title: "Storage | S3 credentials secret | | order:2" }
       # OAuth client of this instance. Secret with keys: client_id, client_secret,
