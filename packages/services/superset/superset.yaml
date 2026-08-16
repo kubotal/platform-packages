@@ -339,6 +339,9 @@ modules:
                   {{- end }}
                   echo "databases reachable"
 
+        extraEnv:
+          SERVER_WORKER_AMOUNT: {{ .Parameters.workers }}
+
         supersetNode:
           resources:
             limits:
@@ -346,7 +349,6 @@ modules:
               cpu: "{{ .Parameters.cpu }}"
           # Connections to an existing database and cache
           connections:
-            gunicornWorkers: {{ .Parameters.workers }}
             # -- PostgreSQL
             db_host: "{{ .Parameters.metadataDb.host }}"
             db_port: "{{ .Parameters.metadataDb.port }}"
