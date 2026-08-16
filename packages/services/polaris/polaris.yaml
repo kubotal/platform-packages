@@ -20,7 +20,7 @@
 # the OAuth client is oidcClientSecretRef. Produces one iceberg-catalog Connection (output catalog).
 apiVersion: v1alpha1
 name: polaris
-tag: 1.3.0-incubating-cnx02
+tag: 1.3.0-incubating-cnx03
 protected: false
 description: |
   Apache Polaris is an open-source, fully-featured catalog for Apache Iceberg™.
@@ -31,7 +31,9 @@ usage:
 schema:
   parameters:
     properties:
-      purge: { type: boolean, default: false, description: "Whether to purge realms and all associated entities." }
+      purge: { type: boolean, default: false, title: "Catalog | Purge realms | | order:3 advanced:true", description: "Whether to purge realms and all associated entities." }
+      # Repris de l'ancien package: la limite memoire etait reglable.
+      memory: { type: string, default: "1Gi", title: "Resources | Memory limit | | order:1 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
       db: { type: connectionRef, connectionType: database-server, required: true, description: "Connection to the PostgreSQL server hosting the Polaris metastore database." }
       storage: { type: connectionRef, connectionType: s3, required: true, description: "Connection to the S3-compatible object store backing the catalogs." }
       s3SecretRef: { type: string, required: true, description: "Secret with keys accessKey/secretKey, this consumer's own S3 identity (STS and catalog-side Iceberg metadata operations)." }
@@ -125,6 +127,12 @@ modules:
         repository: apache/polaris
         pullPolicy: IfNotPresent
         tag: "1.3.0-incubating"
+
+      resources:
+        limits:
+          memory: "{{ .Parameters.memory }}"
+        requests:
+          memory: "512Mi"
 
       extraEnv:
         # S3

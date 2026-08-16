@@ -1,6 +1,6 @@
 apiVersion: v1alpha1
 name: spark-operator
-tag: 2.4.0-p02
+tag: 2.4.0-p03
 protected: false
 description: |
   Spark Operator 2.4.0 - Kubernetes operator for managing Apache Spark applications
@@ -53,8 +53,14 @@ usage:
 schema:
   parameters:
     properties:
+      # Repris de l'ancien package: les trois reglages du controleur, revenus
+      # aux defauts du chart amont a la reecriture.
+      controllerReplicas: { type: integer, default: 1, title: "Controller | Replicas | stepper | order:1" }
+      controllerLogLevel: { type: string, default: "info", enum: ["debug", "info", "warn", "error"], title: "Controller | Log level | | order:2" }
+      controllerWorkers: { type: integer, default: 10, title: "Controller | Workers | stepper | order:3 advanced:true" }
       jobNamespaces:
         type: array
+        title: "Controller | Job namespaces | | order:4"
         items:
           type: string
         description: "List of namespaces where Spark jobs can run. If empty string is included, all namespaces will be allowed"
@@ -95,6 +101,9 @@ modules:
 
       # Controller RBAC
       controller:
+        replicas: {{ .Parameters.controllerReplicas }}
+        logLevel: "{{ .Parameters.controllerLogLevel }}"
+        workers: {{ .Parameters.controllerWorkers }}
         rbac:
           createRole: true
         podSecurityContext:

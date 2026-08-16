@@ -23,7 +23,7 @@ name: trino
 #tag: 480-p01
 # Currently, the UI requires the version to conform to SemVer (https://simversion.github.io/)
 # https://github.com/OKDP/okdp-ui/blob/main/src/app/shared/utils/utils.ts#L131
-tag: 480.0.0-p08
+tag: 480.0.0-p09
 protected: false
 description: |
   Apache Trino - Distributed SQL query engine designed for large-scale data processing across multiple data sources.
@@ -49,9 +49,12 @@ schema:
       allowAuthOverHttp: { type: boolean, default: false, description: "Accept authenticated calls over plain HTTP. Needed by in-cluster clients that reach the coordinator service directly, such as Superset." }
       icebergOauth2Scope: { type: string, default: "PRINCIPAL_ROLE:ALL", description: "OAuth2 scope requested against the Iceberg REST catalog. Polaris rejects the connector default." }
       icebergOidcSecretRef: { type: string, description: "OAuth client Trino uses against the Iceberg REST catalog. Secret with keys: client_id, client_secret. Required when icebergCatalog is set." }
-      numWorkers: { type: integer, default: 1, description: "Number of workers" }
-      workerMemoryGi: { type: number, default: 2, multipleOf: 0.25, description: "Worker memory (GiB) used for Kubernetes requests/limits (recommended: request=limit)." }
-      workerCpu: { type: number, default: 0.5, multipleOf: 0.25, description: "Worker CPU request in millicores (e.g., 500=0.5 vCPU, 1000=1 vCPU)." }
+      numWorkers: { type: integer, default: 1, title: "Cluster | Workers | stepper | order:1 columns:2", description: "Number of workers" }
+      workerMemoryGi: { type: number, default: 2, multipleOf: 0.25, title: "Cluster | Worker memory (GiB) | | order:3 columns:2", description: "Worker memory (GiB) used for Kubernetes requests/limits (recommended: request=limit)." }
+      workerCpu: { type: number, default: 0.5, multipleOf: 0.25, title: "Cluster | Worker CPU (vCPU) | | order:2 columns:2", description: "Worker CPU request in millicores (e.g., 500=0.5 vCPU, 1000=1 vCPU)." }
+      # Repris de l'ancien package: seul le dimensionnement des workers avait
+      # survecu a la reecriture, le coordinateur restait fige en dur.
+      coordinatorMemory: { type: string, default: "8Gi", title: "Cluster | Coordinator memory | | order:4 columns:2 advanced:true placeholder:\"e.g. 2Gi, 8Gi\"" }
       enableOPA: { type: boolean, default: true, description: "Whether to enable OPA." }
       enableOPAL: { type: boolean, default: false, description: "Whether to enable OPAL. When false, OPA policies are loaded from labeled ConfigMaps by the kube-mgmt sidecar." }
       enableOPADebugLogs: { type: boolean, default: false, description: "Log OPA status and decision logs to the container console. Verbose, intended for debugging." }
@@ -353,7 +356,7 @@ modules:
             memory: "1Gi"
           limits:
             cpu: "2"
-            memory: "8Gi"
+            memory: "{{ .Parameters.coordinatorMemory }}"
 
         additionalVolumes:
           - name: cacerts

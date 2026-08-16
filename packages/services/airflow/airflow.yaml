@@ -4,7 +4,7 @@
 # connection platform.oidc, the OAuth client secret is a parameter.
 apiVersion: v1alpha1
 name: airflow
-tag: 3.2.1-cnx02
+tag: 3.2.1-cnx03
 protected: false
 description: |
   Apache Airflow 2.9.3 - Workflow orchestration platform with Spark Operator integration
@@ -42,15 +42,20 @@ schema:
               tokenUrl: { type: string, required: true }
   parameters:
     properties:
-      db: { type: connectionRef, connectionType: database-server, required: true, description: "Connection to the SQL database server hosting the Airflow metadata database." }
-      metadataSecret: { type: string, required: true, description: "Secret with key connection holding the full SQLAlchemy connection string." }
-      securitySecretRef: { type: string, required: true, description: "Secret holding the api secret key, JWT secret and fernet key." }
-      oidcEnabled: { type: boolean, default: false, description: "Enable OIDC authentication on the Airflow UI." }
-      oidcClientSecretRef: { type: string, description: "Secret with keys client_id/client_secret, this instance's own OAuth client." }
-      oidcScope: { type: string, default: "openid+profile+email+offline_access+groups", description: "OAuth scopes requested at login (plus signs are turned into spaces)." }
-      oidcRoleMapping: { type: object, properties: {}, additionalProperties: true, description: "Map of OIDC groups to lists of Airflow roles." }
-      oidcInsecureSkipVerify: { type: boolean, default: false, description: "Skip TLS verification against the OIDC provider." }
-      dagsGitSync: { type: object, properties: {}, additionalProperties: true, description: "Chart dags.gitSync values, credentialsSecret.name carries the git credentials Secret name." }
+      db: { type: connectionRef, connectionType: database-server, required: true, title: "Cluster | Metadata database | | order:2", description: "Connection to the SQL database server hosting the Airflow metadata database." }
+      metadataSecret: { type: string, required: true, title: "Cluster | Metadata connection secret | | order:3", description: "Secret with key connection holding the full SQLAlchemy connection string." }
+      securitySecretRef: { type: string, required: true, title: "Cluster | Security secret | | order:4", description: "Secret holding the api secret key, JWT secret and fernet key." }
+      # Repris de l'ancien package, ou l'executor et le dimensionnement des deux
+      # composants de controle etaient reglables et sont revenus en dur ici.
+      executor: { type: string, default: "KubernetesExecutor", enum: ["KubernetesExecutor", "CeleryExecutor", "LocalExecutor"], title: "Cluster | Executor | | order:1" }
+      schedulerMemory: { type: string, default: "1024Mi", title: "Resources | Scheduler memory limit | | order:1 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
+      webserverMemory: { type: string, default: "1024Mi", title: "Resources | API server memory limit | | order:2 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
+      oidcEnabled: { type: boolean, default: false, title: "Authentication | Enable OIDC | | order:1", description: "Enable OIDC authentication on the Airflow UI." }
+      oidcClientSecretRef: { type: string, title: "Authentication | OIDC client secret | | order:2 condition:oidcEnabled=true", description: "Secret with keys client_id/client_secret, this instance's own OAuth client." }
+      oidcScope: { type: string, default: "openid+profile+email+offline_access+groups", title: "Authentication | Scopes | | order:3 advanced:true condition:oidcEnabled=true", description: "OAuth scopes requested at login (plus signs are turned into spaces)." }
+      oidcRoleMapping: { type: object, properties: {}, additionalProperties: true, title: "Authentication | Role mapping | | order:4 advanced:true condition:oidcEnabled=true", description: "Map of OIDC groups to lists of Airflow roles." }
+      oidcInsecureSkipVerify: { type: boolean, default: false, title: "Authentication | Skip TLS verification | | order:5 advanced:true condition:oidcEnabled=true", description: "Skip TLS verification against the OIDC provider." }
+      dagsGitSync: { type: object, properties: {}, additionalProperties: true, title: "DAGs | Git sync | | order:1", description: "Chart dags.gitSync values, credentialsSecret.name carries the git credentials Secret name." }
 
 modules:
   - name: main
@@ -61,7 +66,7 @@ modules:
         chart: airflow
         version: 1.21.0
     values: |
-      executor: KubernetesExecutor
+      executor: "{{ .Parameters.executor }}"
 
       defaultAirflowTag: "3.2.1"
       airflowVersion: "3.2.1"
@@ -124,7 +129,7 @@ modules:
             memory: "384Mi"
             cpu: "200m"
           limits:
-            memory: "1024Mi"
+            memory: "{{ .Parameters.webserverMemory }}"
             cpu: "1000m"
         startupProbe:
           failureThreshold: 24
@@ -186,7 +191,7 @@ modules:
             memory: "384Mi"
             cpu: "200m"
           limits:
-            memory: "1024Mi"
+            memory: "{{ .Parameters.schedulerMemory }}"
             cpu: "1000m"
         startupProbe:
           failureThreshold: 12

@@ -21,7 +21,7 @@
 
 apiVersion: v1alpha1
 name: superset
-tag: 6.0.0-cnx05
+tag: 6.0.0-cnx06
 protected: false
 description: |
   Apache Superset - Enterprise business intelligence platform for modern data teams.
@@ -34,9 +34,15 @@ usage:
 schema:
   parameters:
     properties:
-      load_examples: { type: boolean, default: true, description: "Whether to load superset examples" }
+      load_examples: { type: boolean, default: true, title: "Cluster | Load examples | | order:2", description: "Whether to load superset examples" }
+      # Repris de l'ancien package: le compte d'amorcage et le dimensionnement
+      # du noeud Superset etaient reglables et sont revenus aux defauts du chart.
+      adminUser: { type: string, default: "admin", title: "Admin | Username | | order:1" }
+      memory: { type: string, default: "2Gi", title: "Resources | Memory | | order:1 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
+      cpu: { type: string, default: "500m", title: "Resources | CPU | | order:2 columns:2 advanced:true placeholder:\"e.g. 500m, 1\"" }
+      workers: { type: integer, default: 2, title: "Resources | Gunicorn workers | stepper | order:3 advanced:true" }
       # Superset metadata database
-      metadataDb: { type: connectionRef, connectionType: database-server, required: true }
+      metadataDb: { type: connectionRef, connectionType: database-server, required: true, title: "Cluster | Metadata database | | order:1" }
       # Database hosting the superset examples (used when load_examples is true)
       examplesDb: { type: connectionRef, connectionType: database-server, required: true }
       # Secret Key for Superset's Flask App. Secret with key: superset_secret_key
@@ -292,6 +298,8 @@ modules:
         # databases existing: the schema upgrade then fails on a database not
         # created yet, and the job burns its retries.
         init:
+          adminUser:
+            username: "{{ .Parameters.adminUser }}"
           initContainers:
             - name: wait-for-databases
               image: postgres:16-alpine
@@ -333,8 +341,13 @@ modules:
                   echo "databases reachable"
 
         supersetNode:
+          resources:
+            limits:
+              memory: "{{ .Parameters.memory }}"
+              cpu: "{{ .Parameters.cpu }}"
           # Connections to an existing database and cache
           connections:
+            gunicornWorkers: {{ .Parameters.workers }}
             # -- PostgreSQL
             db_host: "{{ .Parameters.metadataDb.host }}"
             db_port: "{{ .Parameters.metadataDb.port }}"

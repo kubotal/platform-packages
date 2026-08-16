@@ -20,7 +20,7 @@
 # The OAuth client of this instance is the ordinary parameter oidcClientSecretRef.
 apiVersion: v1alpha1
 name: spark-history-server
-tag: 3.5.1-cnx02
+tag: 3.5.1-cnx03
 protected: false
 description: |
   Spark History Server - Monitoring and debugging interface for Apache Spark applications.
@@ -37,7 +37,11 @@ usage:
 schema:
   parameters:
     properties:
-      enableWebProxy: { type: boolean, default: true, description: "Whether to enable Spark History web proxy" }
+      enableWebProxy: { type: boolean, default: true, title: "Cluster | Enable web proxy | | order:1", description: "Whether to enable Spark History web proxy" }
+      # Repris de l'ancien package: le dimensionnement du history server etait
+      # reglable, il tourne aujourd'hui sur les defauts du chart.
+      resourceCpu: { type: string, default: "500m", title: "Resources | CPU limit | | order:2 columns:2 advanced:true placeholder:\"e.g. 500m, 1\"" }
+      resourceMemory: { type: string, default: "1Gi", title: "Resources | Memory limit | | order:1 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
       webProxyUrlPrefix: { type: string, default: "spark-web-proxy", description: "Spark web proxy url prefix" }
       storage: { type: connectionRef, connectionType: s3, required: true, description: "Connection to the S3-compatible object store holding the Spark event logs." }
       s3SecretRef: { type: string, required: true, description: "Secret with keys accessKey/secretKey, this consumer's own S3 identity." }
@@ -118,6 +122,14 @@ modules:
         repository: quay.io/okdp/spark
         pullPolicy: IfNotPresent
         tag: "spark-3.5.6-scala-2.12-java-17"
+
+      resources:
+        limits:
+          cpu: "{{ .Parameters.resourceCpu }}"
+          memory: "{{ .Parameters.resourceMemory }}"
+        requests:
+          cpu: "250m"
+          memory: "512Mi"
 
       ingress:
         enabled: true
