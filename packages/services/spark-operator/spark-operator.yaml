@@ -1,6 +1,6 @@
 apiVersion: v1alpha1
 name: spark-operator
-tag: 2.4.0-p03
+tag: 2.4.0-p04
 protected: false
 description: |
   Spark Operator 2.4.0 - Kubernetes operator for managing Apache Spark applications
@@ -65,14 +65,17 @@ schema:
           type: string
         description: "List of namespaces where Spark jobs can run. If empty string is included, all namespaces will be allowed"
       metricsEnabled:
+        title: "Monitoring | Enable metrics | | order:1"
         type: boolean
         default: true
         description: "Enable Prometheus metrics"
       podMonitorEnabled:
+        title: "Monitoring | Create PodMonitor | | order:2 condition:metricsEnabled=true"
         type: boolean
         default: false
         description: "Create PodMonitor for metrics collection"
       webhookEnabled:
+        title: "Controller | Admission webhook | | order:5 advanced:true"
         type: boolean
         default: true
         description: "Enable admission webhook for validation and mutation"

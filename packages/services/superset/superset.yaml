@@ -21,7 +21,7 @@
 
 apiVersion: v1alpha1
 name: superset
-tag: 6.0.0-cnx06
+tag: 6.0.0-cnx07
 protected: false
 description: |
   Apache Superset - Enterprise business intelligence platform for modern data teams.
@@ -44,30 +44,31 @@ schema:
       # Superset metadata database
       metadataDb: { type: connectionRef, connectionType: database-server, required: true, title: "Cluster | Metadata database | | order:1" }
       # Database hosting the superset examples (used when load_examples is true)
-      examplesDb: { type: connectionRef, connectionType: database-server, required: true }
+      examplesDb: { title: "Cluster | Examples database | | order:3", type: connectionRef, connectionType: database-server, required: true }
       # Secret Key for Superset's Flask App. Secret with key: superset_secret_key
-      secretKeyRef: { type: string, required: true }
+      secretKeyRef: { title: "Cluster | Flask secret key | | order:4", type: string, required: true }
       # External redis. Host defaults to the redis bundled by the chart
-      redisHost: { type: string }
-      redisPort: { type: integer, default: 6379 }
+      redisHost: { title: "Cluster | Redis host | | order:5 columns:2 advanced:true", type: string }
+      redisPort: { title: "Cluster | Redis port | | order:6 columns:2 advanced:true", type: integer, default: 6379 }
       # Secret with keys: username, password
-      redisSecretRef: { type: string, required: true }
+      redisSecretRef: { title: "Cluster | Redis credentials secret | | order:7", type: string, required: true }
       # OAuth client of THIS instance. The provider comes from the platform context
-      oidcEnabled: { type: boolean, default: true }
-      oidcProvider: { type: string, default: keycloak, description: "Provider display name" }
-      oidcScope: { type: string, default: "openid profile email groups" }
-      oidcUsePKCE: { type: boolean, default: true }
+      oidcEnabled: { title: "Authentication | Enable OIDC | | order:1", type: boolean, default: true }
+      oidcProvider: { title: "Authentication | Provider display name | | order:2 condition:oidcEnabled=true", type: string, default: keycloak, description: "Provider display name" }
+      oidcScope: { title: "Authentication | Scopes | | order:4 advanced:true condition:oidcEnabled=true", type: string, default: "openid profile email groups" }
+      oidcUsePKCE: { title: "Authentication | Use PKCE | | order:5 advanced:true condition:oidcEnabled=true", type: boolean, default: true }
       # Secret with keys: client_id, client_secret
-      oidcClientSecretRef: { type: string, required: true }
+      oidcClientSecretRef: { title: "Authentication | OIDC client secret | | order:3 condition:oidcEnabled=true", type: string, required: true }
       # Map of OIDC roles to lists of superset roles
-      oidcRoleMapping: { type: object, properties: {}, additionalProperties: true }
-      trinoOidcEnabled: { type: boolean, default: true }
-      trinoOidcScope: { type: string, default: "openid profile email groups" }
+      oidcRoleMapping: { title: "Authentication | Role mapping | | order:6 advanced:true condition:oidcEnabled=true", type: object, properties: {}, additionalProperties: true }
+      trinoOidcEnabled: { title: "Datasources | Trino OIDC | | order:2", type: boolean, default: true }
+      trinoOidcScope: { title: "Datasources | Trino scopes | | order:4 advanced:true condition:trinoOidcEnabled=true", type: string, default: "openid profile email groups" }
       # Secret with keys: client_id, client_secret
-      trinoOidcClientSecretRef: { type: string, required: true }
+      trinoOidcClientSecretRef: { title: "Datasources | Trino OAuth client secret | | order:3 condition:trinoOidcEnabled=true", type: string, required: true }
       # Datasources: one list, each element wires its own trino connection and
       # its catalog. The name is the display name in the Superset UI
       datasources:
+        title: "Datasources | Trino datasources | | order:1"
         type: array
         items:
           properties:

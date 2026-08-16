@@ -16,7 +16,7 @@
 
 apiVersion: v1alpha1
 name: okdp-examples
-tag: 1.3.0-p01
+tag: 1.3.0-p02
 protected: false
 description: |
   A collection of hands-on examples, helper utilities, Jupyter notebooks, 
@@ -28,8 +28,8 @@ usage:
 schema:
   parameters:
     properties:
-      memoryGi: { type: number, default: 0.5, multipleOf: 0.25, description: "Memory (GiB) used for Kubernetes requests/limits (recommended: request=limit)." }
-      cpu: { type: number, default: 0.5, multipleOf: 0.25, description: "CPU request in millicores (e.g., 500=0.5 vCPU, 1000=1 vCPU)." }
+      memoryGi: { title: "Resources | Memory (GiB) | | order:2 columns:2", type: number, default: 0.5, multipleOf: 0.25, description: "Memory (GiB) used for Kubernetes requests/limits (recommended: request=limit)." }
+      cpu: { title: "Resources | CPU (vCPU) | | order:1 columns:2", type: number, default: 0.5, multipleOf: 0.25, description: "CPU request in millicores (e.g., 500=0.5 vCPU, 1000=1 vCPU)." }
 modules:
   - name: main
     timeout: 10m

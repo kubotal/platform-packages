@@ -20,7 +20,7 @@
 # Produces one hive Connection (output metastore) carrying the final thrift URI.
 apiVersion: v1alpha1
 name: hive-metastore
-tag: 4.0.1-cnx01
+tag: 4.0.1-cnx02
 protected: false
 description: |
   Hive Metastore is a centralized metadata repository for data lakes and big data analytics.
@@ -33,12 +33,12 @@ usage:
 schema:
   parameters:
     properties:
-      memoryGi: { type: number, default: 0.5, multipleOf: 0.25, description: "Memory (GiB) used for Kubernetes requests/limits (recommended: request=limit)." }
-      cpu: { type: number, default: 0.5, multipleOf: 0.25, description: "CPU request in millicores (e.g., 500=0.5 vCPU, 1000=1 vCPU)." }
-      db: { type: connectionRef, connectionType: database-server, required: true, description: "Connection to the SQL database hosting the metastore schema." }
-      storage: { type: connectionRef, connectionType: s3, required: true, description: "Connection to the S3-compatible object store hosting the warehouse." }
-      s3SecretRef: { type: string, required: true, description: "Secret with keys accessKey/secretKey, this consumer's own S3 identity." }
-      warehouseBucket: { type: string, default: hive, description: "S3 bucket used as the warehouse directory." }
+      memoryGi: { title: "Resources | Memory (GiB) | | order:2 columns:2", type: number, default: 0.5, multipleOf: 0.25, description: "Memory (GiB) used for Kubernetes requests/limits (recommended: request=limit)." }
+      cpu: { title: "Resources | CPU (vCPU) | | order:1 columns:2", type: number, default: 0.5, multipleOf: 0.25, description: "CPU request in millicores (e.g., 500=0.5 vCPU, 1000=1 vCPU)." }
+      db: { title: "Cluster | Metadata database | | order:1", type: connectionRef, connectionType: database-server, required: true, description: "Connection to the SQL database hosting the metastore schema." }
+      storage: { title: "Storage | Object store | | order:1", type: connectionRef, connectionType: s3, required: true, description: "Connection to the S3-compatible object store hosting the warehouse." }
+      s3SecretRef: { title: "Storage | S3 credentials secret | | order:2", type: string, required: true, description: "Secret with keys accessKey/secretKey, this consumer's own S3 identity." }
+      warehouseBucket: { title: "Storage | Warehouse bucket | | order:3 columns:2", type: string, default: hive, description: "S3 bucket used as the warehouse directory." }
 modules:
   - name: main
     timeout: 10m

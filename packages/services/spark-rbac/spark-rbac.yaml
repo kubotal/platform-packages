@@ -16,7 +16,7 @@
 
 apiVersion: v1alpha1
 name: spark-rbac
-tag: 1.0.1-cnx01
+tag: 1.0.1-cnx02
 protected: false
 description: |
   Helm chart that provisions the Kubernetes ServiceAccount and RBAC resources
@@ -28,10 +28,10 @@ usage:
 schema:
   parameters:
     properties:
-      rbacCreate: { type: boolean, default: true }
-      serviceAccountCreate: { type: boolean, default: true }
-      serviceAccountName: { type: string, default: spark }
-      automountServiceAccountToken: { type: boolean, default: true }
+      rbacCreate: { title: "RBAC | Create role | | order:1", type: boolean, default: true }
+      serviceAccountCreate: { title: "RBAC | Create service account | | order:2", type: boolean, default: true }
+      serviceAccountName: { title: "RBAC | Service account name | | order:3 columns:2", type: string, default: spark }
+      automountServiceAccountToken: { title: "RBAC | Automount token | | order:4 advanced:true", type: boolean, default: true }
 modules:
   - name: main
     timeout: 10m

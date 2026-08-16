@@ -21,7 +21,7 @@
 
 apiVersion: v1alpha1
 name: jupyterhub
-tag: 4.3.3-cnx04
+tag: 4.3.3-cnx05
 protected: false
 description: |
   JupyterHub - Multi-user interactive development environment for data science and machine learning.
@@ -89,6 +89,7 @@ schema:
         title: "Spark | Enabled connections | | order:1"
         items: { type: string }
       sparkRbac:
+        title: "Spark | RBAC | | order:3 advanced:true"
         properties:
           rbac:
             properties:
@@ -99,6 +100,7 @@ schema:
               name: { type: string, default: "spark" }
               automountServiceAccountToken: { type: boolean, default: true }
       sparkDefaults:
+        title: "Spark | Conf defaults | | order:4 advanced:true"
         type: object
         description: "Spark conf defaults injected into PYSPARK_SUBMIT_ARGS (final values)"
         properties: {}
