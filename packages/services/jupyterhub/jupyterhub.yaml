@@ -19,7 +19,7 @@
 
 apiVersion: v1alpha1
 name: jupyterhub
-tag: 4.3.3-cnx08
+tag: 4.3.3-cnx07
 protected: false
 description: |
   JupyterHub - Multi-user interactive development environment for data science and machine learning.
@@ -66,7 +66,6 @@ schema:
             name: { type: string, required: true }
             uri: { type: string, required: true }
       welcomeNotebook: { type: string, default: "", title: "Notebooks | Welcome notebook | textarea | order:4 advanced:true", description: "Welcome.ipynb content copied into each user home" }
-      extraEnv: { type: object, properties: {}, additionalProperties: true, title: "Notebooks | Extra environment | | order:5 advanced:true", description: "Environment variables added to every single-user server (e.g. TRINO_HOST)." }
       # PySpark connections: each item carries its final spark conf lines
       # (properties) and optionally its own S3 identity (keys accessKey/secretKey).
       # pyspark lists the connection names to enable.
@@ -377,9 +376,6 @@ modules:
           AWS_CA_BUNDLE: /cacerts/ca.crt
           REQUESTS_CA_BUNDLE: /cacerts/ca.crt
           CURL_CA_BUNDLE: /cacerts/ca.crt
-        {{- range $k, $v := (.Parameters.extraEnv | default dict) }}
-          {{ $k }}: {{ $v | quote }}
-        {{- end }}
           SSL_CERT_FILE: /cacerts/ca.crt
           TRUSTSTORE_PASSWORD: ""
 
