@@ -2,7 +2,7 @@
 # the connection string from the Secret named by metadataSecret.
 apiVersion: v1alpha1
 name: airflow
-tag: 3.2.1-cnx04
+tag: 3.2.1-cnx05
 protected: false
 description: |
   Apache Airflow 2.9.3 - Workflow orchestration platform with Spark Operator integration
@@ -51,6 +51,7 @@ schema:
       oidcRoleMapping: { type: object, properties: {}, additionalProperties: true, title: "Authentication | Role mapping | | order:4 advanced:true condition:oidcEnabled=true", description: "Map of OIDC groups to lists of Airflow roles." }
       oidcInsecureSkipVerify: { type: boolean, default: false, title: "Authentication | Skip TLS verification | | order:5 advanced:true condition:oidcEnabled=true", description: "Skip TLS verification against the OIDC provider." }
       dagsGitSync: { type: object, properties: {}, additionalProperties: true, title: "DAGs | Git sync | | order:1", description: "Chart dags.gitSync values, credentialsSecret.name carries the git credentials Secret name." }
+      extraEnv: { type: object, properties: {}, additionalProperties: true, title: "DAGs | Extra environment | | order:2 advanced:true", description: "Environment variables added to every Airflow component (e.g. AIRFLOW_NAMESPACE for the example DAGs)." }
 
 modules:
   - name: main
@@ -87,6 +88,10 @@ modules:
       {{- end }}
 
       extraEnv: |
+      {{- range $k, $v := (.Parameters.extraEnv | default dict) }}
+        - name: {{ $k }}
+          value: {{ $v | quote }}
+      {{- end }}
       {{- if $airflowOidcEnabled }}
         - name: AIRFLOW_OIDC_CLIENT_ID
           valueFrom:
