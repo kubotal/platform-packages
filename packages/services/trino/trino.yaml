@@ -21,7 +21,7 @@ name: trino
 #tag: 480-p01
 # Currently, the UI requires the version to conform to SemVer (https://simversion.github.io/)
 # https://github.com/OKDP/okdp-ui/blob/main/src/app/shared/utils/utils.ts#L131
-tag: 480.0.0-p11
+tag: 480.0.0-p13
 protected: false
 description: |
   Apache Trino - Distributed SQL query engine designed for large-scale data processing across multiple data sources.
@@ -41,12 +41,18 @@ schema:
       sharedSecretRef: { title: "Authentication | Internal shared secret | | order:3", type: string, required: true, description: "Trino internal communication shared secret. Secret with key: shared-secret." }
       oidcScope: { title: "Authentication | Scopes | | order:2 advanced:true", type: string, default: "openid profile email groups", description: "Scopes requested on the OAuth2 login flow." }
       hiveCatalog: { title: "Catalogs | Hive catalog name | | order:4 columns:2", type: string, default: hive, description: "Name of the hive catalog." }
-      icebergCatalog: { title: "Catalogs | Iceberg REST catalog | | order:5", type: connectionRef, contract: iceberg-catalog, description: "Iceberg REST catalog (Polaris) exposed as a second catalog. Omit to run with the hive catalog only." }
-      icebergCatalogName: { title: "Catalogs | Iceberg catalog name | | order:6 columns:2", type: string, default: iceberg, description: "Name of the iceberg catalog." }
-      icebergWarehouse: { title: "Catalogs | Iceberg warehouse | | order:7 columns:2 advanced:true", type: string, description: "Polaris catalog used as the Iceberg warehouse. Defaults to the realm published on the connection." }
+      icebergCatalogs:
+        title: "Catalogs | Iceberg REST catalogs | | order:5"
+        type: array
+        description: "Iceberg REST catalogs (Polaris), one Trino catalog per item. Empty runs with the hive catalog only."
+        items:
+          properties:
+            name: { type: string, required: true, description: "Trino catalog name." }
+            catalog: { type: connectionRef, contract: iceberg-catalog, required: true, description: "Iceberg REST catalog connection." }
+            warehouse: { type: string, description: "Polaris catalog used as the warehouse. Defaults to the realm published on the connection." }
+            oidcSecretRef: { type: string, required: true, description: "OAuth client Trino uses against this catalog. Secret with keys: client_id, client_secret." }
+            oauth2Scope: { type: string, default: "PRINCIPAL_ROLE:ALL", description: "OAuth2 scope requested. Polaris rejects the connector default." }
       allowAuthOverHttp: { title: "Authentication | Allow auth over HTTP | | order:7 advanced:true", type: boolean, default: false, description: "Accept authenticated calls over plain HTTP. Needed by in-cluster clients that reach the coordinator service directly, such as Superset." }
-      icebergOauth2Scope: { title: "Catalogs | Iceberg OAuth scope | | order:9 advanced:true", type: string, default: "PRINCIPAL_ROLE:ALL", description: "OAuth2 scope requested against the Iceberg REST catalog. Polaris rejects the connector default." }
-      icebergOidcSecretRef: { title: "Catalogs | Iceberg OAuth client secret | | order:8 advanced:true", type: string, description: "OAuth client Trino uses against the Iceberg REST catalog. Secret with keys: client_id, client_secret. Required when icebergCatalog is set." }
       numWorkers: { type: integer, default: 1, title: "Cluster | Workers | stepper | order:1 columns:2", description: "Number of workers" }
       workerMemoryGi: { type: number, default: 2, multipleOf: 0.25, title: "Cluster | Worker memory (GiB) | | order:3 columns:2", description: "Worker memory (GiB) used for Kubernetes requests/limits (recommended: request=limit)." }
       workerCpu: { type: number, default: 0.5, multipleOf: 0.25, title: "Cluster | Worker CPU (vCPU) | | order:2 columns:2", description: "Worker CPU request in millicores (e.g., 500=0.5 vCPU, 1000=1 vCPU)." }
@@ -261,21 +267,22 @@ modules:
           s3.region={{ .Parameters.storage.region }}
           s3.aws-access-key=${ENV:S3_ACCESS_KEY}
           s3.aws-secret-key=${ENV:S3_SECRET_ACCESS}
-        {{- if .Parameters.icebergCatalog }}
-        {{ .Parameters.icebergCatalogName }}: |
+        {{- range $ic := (.Parameters.icebergCatalogs | default list) }}
+        {{- $envPrefix := upper (replace "-" "_" $ic.name) }}
+        {{ $ic.name }}: |
           connector.name=iceberg
           iceberg.catalog.type=rest
-          iceberg.rest-catalog.uri={{ .Parameters.icebergCatalog.internalUri | default .Parameters.icebergCatalog.uri }}
-          iceberg.rest-catalog.warehouse={{ .Parameters.icebergWarehouse | default .Parameters.icebergCatalog.realm }}
+          iceberg.rest-catalog.uri={{ $ic.catalog.internalUri | default $ic.catalog.uri }}
+          iceberg.rest-catalog.warehouse={{ $ic.warehouse | default $ic.catalog.realm }}
           iceberg.rest-catalog.security=OAUTH2
-          iceberg.rest-catalog.oauth2.credential=${ENV:ICEBERG_OAUTH_CREDENTIAL}
-          iceberg.rest-catalog.oauth2.scope={{ .Parameters.icebergOauth2Scope }}
-          iceberg.rest-catalog.oauth2.server-uri={{ .Parameters.icebergCatalog.internalUri | default .Parameters.icebergCatalog.uri }}/v1/oauth/tokens
+          iceberg.rest-catalog.oauth2.credential=${ENV:ICEBERG_OAUTH_{{ $envPrefix }}}
+          iceberg.rest-catalog.oauth2.scope={{ $ic.oauth2Scope | default "PRINCIPAL_ROLE:ALL" }}
+          iceberg.rest-catalog.oauth2.server-uri={{ $ic.catalog.internalUri | default $ic.catalog.uri }}/v1/oauth/tokens
           iceberg.rest-catalog.vended-credentials-enabled=false
           fs.native-s3.enabled=true
-          s3.endpoint={{ .Parameters.storage.apiUrl }}
+          s3.endpoint={{ $.Parameters.storage.apiUrl }}
           s3.path-style-access=true
-          s3.region={{ .Parameters.storage.region }}
+          s3.region={{ $.Parameters.storage.region }}
           s3.aws-access-key=${ENV:S3_ACCESS_KEY}
           s3.aws-secret-key=${ENV:S3_SECRET_ACCESS}
         {{- end }}
@@ -303,20 +310,21 @@ modules:
               key: client_secret
               {{- end }}
 
-        {{- if .Parameters.icebergCatalog }}
-        - name: ICEBERG_OAUTH_CLIENT_ID
+        {{- range $ic := (.Parameters.icebergCatalogs | default list) }}
+        {{- $envPrefix := upper (replace "-" "_" $ic.name) }}
+        - name: ICEBERG_OAUTH_CLIENT_ID_{{ $envPrefix }}
           valueFrom:
             secretKeyRef:
-              name: {{ required "icebergOidcSecretRef is required when icebergCatalog is set" .Parameters.icebergOidcSecretRef }}
+              name: {{ $ic.oidcSecretRef }}
               key: client_id
-        - name: ICEBERG_OAUTH_CLIENT_SECRET
+        - name: ICEBERG_OAUTH_CLIENT_SECRET_{{ $envPrefix }}
           valueFrom:
             secretKeyRef:
-              name: {{ .Parameters.icebergOidcSecretRef }}
+              name: {{ $ic.oidcSecretRef }}
               key: client_secret
         # Kubernetes expands $(VAR) from variables declared earlier in this list.
-        - name: ICEBERG_OAUTH_CREDENTIAL
-          value: "$(ICEBERG_OAUTH_CLIENT_ID):$(ICEBERG_OAUTH_CLIENT_SECRET)"
+        - name: ICEBERG_OAUTH_{{ $envPrefix }}
+          value: "$(ICEBERG_OAUTH_CLIENT_ID_{{ $envPrefix }}):$(ICEBERG_OAUTH_CLIENT_SECRET_{{ $envPrefix }})"
         {{- end }}
 
         - name: TRINO_SHARED_SECRET
