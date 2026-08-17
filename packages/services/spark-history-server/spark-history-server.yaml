@@ -18,7 +18,7 @@
 # name this instance's own identities.
 apiVersion: v1alpha1
 name: spark-history-server
-tag: 3.5.1-cnx05
+tag: 3.5.1-cnx06
 protected: false
 description: |
   Spark History Server - Monitoring and debugging interface for Apache Spark applications.
@@ -96,7 +96,7 @@ modules:
       {{- $modifyGroups := get $oidcRoleMapping "modify_groups" | default list -}}
       {{- $viewGroups := get $oidcRoleMapping "view_groups" | default list -}}
 
-      {{- $storageApiUrl := .Parameters.storage.apiUrl -}}
+      {{- $storageApiUrl := .Parameters.storage.internalUrl | default .Parameters.storage.apiUrl -}}
 
       {{- $historyEndpointUrl := printf "https://spark-history-%s.%s" $namespace $domain -}}
       {{- $historyEndpointHost := printf "spark-history-%s.%s" $namespace $domain -}}
@@ -144,6 +144,7 @@ modules:
 
       config:
         spark.hadoop.fs.s3a.endpoint: {{ $storageApiUrl }}
+        spark.hadoop.fs.s3a.path.style.access: {{ .Parameters.storage.pathStyle | default false }}
         spark.io.okdp.spark.authc.OidcAuthFilter.param.issuer-uri: {{ $oidcIssuerUri }}
         spark.io.okdp.spark.authc.OidcAuthFilter.param.redirect-uri: {{ $historyRedirectUri }}/home
         spark.io.okdp.spark.authc.OidcAuthFilter.param.scope: {{ .Parameters.oidcScope }}
