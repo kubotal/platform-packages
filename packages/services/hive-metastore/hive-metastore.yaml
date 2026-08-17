@@ -14,10 +14,8 @@
 #  limitations under the License.
 #
 
-# Connections wiring: consumes db (connection type database-server) and storage (connection type s3)
-# as connectionRef parameters, values resolved flat at render time.
-# The S3 identity is the ordinary parameter s3SecretRef (Secret keys accessKey/secretKey).
-# Produces one hive Connection (output metastore) carrying the final thrift URI.
+# Consumes db (database-server) and storage (s3). Produces one hive
+# Connection (output metastore).
 apiVersion: v1alpha1
 name: hive-metastore
 tag: 4.0.1-cnx02

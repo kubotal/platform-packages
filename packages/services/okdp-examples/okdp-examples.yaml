@@ -16,7 +16,7 @@
 
 apiVersion: v1alpha1
 name: okdp-examples
-tag: 1.3.0-p02
+tag: 1.3.0-p03
 protected: false
 description: |
   A collection of hands-on examples, helper utilities, Jupyter notebooks, 
@@ -41,7 +41,7 @@ modules:
       
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
-      {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
+      {{- $domain := printf "%v" .Context.ingress.suffix -}}
       
       {{- $oidcId := .Context.examples.trino.oidc.provider -}}
       {{- $oidcProvider := (index .Context $oidcId).provider -}}
@@ -123,17 +123,17 @@ modules:
 
         - name: SPARK_EVENT_LOG_DIRECTORY
           value: {{ $sparkHistoryLogDir }}
-        {{- if .Context.platform.proxy.httpProxy }}
+        {{- if .Context.proxy.httpProxy }}
         - name: HTTP_PROXY
-          value: {{ .Context.platform.proxy.httpProxy | quote }}
+          value: {{ .Context.proxy.httpProxy | quote }}
         {{- end }}
-        {{- if .Context.platform.proxy.httpsProxy }}
+        {{- if .Context.proxy.httpsProxy }}
         - name: HTTPS_PROXY
-          value: {{ .Context.platform.proxy.httpsProxy | quote }}
+          value: {{ .Context.proxy.httpsProxy | quote }}
         {{- end }}
-        {{- if .Context.platform.proxy.noProxy }}
+        {{- if .Context.proxy.noProxy }}
         - name: NO_PROXY
-          value: {{ .Context.platform.proxy.noProxy | quote }}
+          value: {{ .Context.proxy.noProxy | quote }}
         {{- end }}
         # Polaris
         - name: OIDC_ISSUER_URL

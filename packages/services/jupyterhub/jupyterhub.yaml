@@ -14,14 +14,12 @@
 #  limitations under the License.
 #
 
-# Connections wiring: the file browser S3 store is a connectionRef parameter
-# (storage), the consumer S3 identity is the s3SecretRef parameter (keys
-# accessKey/secretKey) and the OIDC provider comes from the platform context
-# variable platform.oidc. Other former context values are parameters.
+# Consumes one s3 Connection (storage); s3SecretRef and oidcClientSecretRef
+# name this instance's own identities.
 
 apiVersion: v1alpha1
 name: jupyterhub
-tag: 4.3.3-cnx05
+tag: 4.3.3-cnx06
 protected: false
 description: |
   JupyterHub - Multi-user interactive development environment for data science and machine learning.
@@ -30,7 +28,7 @@ description: |
 usage:
   text: |
     JupyterHub provides multi-user Jupyter notebook environment with OAuth authentication.
-    Access the hub at https://jupyterhub-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
+    Access the hub at https://jupyterhub-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}
 schema:
   parameters:
     properties:
@@ -49,11 +47,8 @@ schema:
       storage: { type: connectionRef, contract: s3, required: true, title: "Storage | Object store | | order:1" }
       # This consumer's own S3 identity. Secret with keys: accessKey, secretKey.
       s3SecretRef: { type: string, required: true, title: "Storage | S3 credentials secret | | order:2" }
-      # OAuth client of this instance. Secret with keys: client_id, client_secret,
-      # JUPYTERHUB_CRYPT_KEY. Required in the "existing" provisioning mode, where
-      # somebody else made it; left empty in the "kubauth" one, where this
-      # package generates the client itself and names the Secret after the
-      # release.
+      # OAuth client Secret (client_id, client_secret, JUPYTERHUB_CRYPT_KEY).
+      # Required in existing provisioning mode, generated in kubauth mode.
       oidcClientSecretRef: { type: string, title: "Authentication | OIDC client secret | | order:2" }
       oidcLoginService: { type: string, default: "keycloak", title: "Authentication | Provider display name | | order:1", description: "Display name of the OIDC provider on the login page (GenericOAuthenticator login_service)" }
       oidcRoleMapping:
@@ -105,55 +100,49 @@ schema:
         additionalProperties: true
   context:
     properties:
-      platform:
+      certificateIssuers:
         required: true
         properties:
-          certificateIssuers:
-            required: true
+          selfSigned:
             properties:
-              selfSigned:
-                properties:
-                  name: { type: string, required: true }
-          ingress:
-            required: true
-            properties:
-              suffix: { type: string, required: true }
-          storageClass:
-            required: true
-            properties:
-              workspace: { type: string, required: true }
-          oidc:
-            required: true
-            properties:
-              authUrl: { type: string, required: true }
-              tokenUrl: { type: string, required: true }
-              userinfoUrl: { type: string, required: true }
-          # Who makes the OAuth client. In the kubauth mode this package
-          # generates it, in the existing one it is handed a Secret name.
-          identity:
-            required: true
-            properties:
-              clientProvisioning: { type: string, required: true }
-              kubauthNamespace: { type: string }
+              name: { type: string, required: true }
+      ingress:
+        required: true
+        properties:
+          suffix: { type: string, required: true }
+      storageClass:
+        required: true
+        properties:
+          workspace: { type: string, required: true }
+      oidc:
+        required: true
+        properties:
+          authUrl: { type: string, required: true }
+          tokenUrl: { type: string, required: true }
+          userinfoUrl: { type: string, required: true }
+      # Who makes the OAuth client. In the kubauth mode this package
+      # generates it, in the existing one it is handed a Secret name.
+      identity:
+        required: true
+        properties:
+          clientProvisioning: { type: string, required: true }
+          kubauthNamespace: { type: string }
 modules:
-  # Provisions the OAuth client against kubauth. Off unless the platform says
-  # kubauth makes the clients: on a platform where somebody else does, posting
-  # an OidcClient would be inventing a client nobody asked for.
+  # Active only when the platform says kubauth makes the clients.
   - name: oidc-client
-    enabled: "{{ eq .Context.platform.identity.clientProvisioning \"kubauth\" }}"
+    enabled: "{{ eq .Context.identity.clientProvisioning \"kubauth\" }}"
     source:
       local:
         path: ../../../charts/oidc-client
     values: |
       clientName: "{{ .Release.metadata.name }}"
-      oidcNamespace: "{{ .Context.platform.identity.kubauthNamespace }}"
+      oidcNamespace: "{{ .Context.identity.kubauthNamespace }}"
       credentialsSecretName: "{{ .Release.metadata.name }}-oidc-creds"
-      # JupyterHub encrypts its auth state with this, and it is no more
-      # somebody else's business than the client secret is.
+      # Encrypts JupyterHub auth state.
       extraGeneratedKeys:
         - JUPYTERHUB_CRYPT_KEY
       redirectURIs:
-        - "https://{{ .Release.metadata.name }}.{{ .Context.platform.ingress.suffix }}/hub/oauth_callback"
+        - "https://{{ .Release.metadata.name }}.{{ .Context.ingress.suffix }}/hub/oauth_callback"
       displayName: "JupyterHub ({{ .Release.metadata.name }})"
       description: "OIDC client for JupyterHub {{ .Release.metadata.name }}"
 
@@ -183,17 +172,17 @@ modules:
     values: |
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
-      {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
+      {{- $domain := printf "%v" .Context.ingress.suffix -}}
 
       {{- $oidcRoleMapping := .Parameters.oidcRoleMapping | default dict -}}
 
       {{- $oidcName := .Parameters.oidcLoginService -}}
 
-      {{- $oidcAuthUrl := .Context.platform.oidc.authUrl -}}
+      {{- $oidcAuthUrl := .Context.oidc.authUrl -}}
 
-      {{- $oidcTokenUrl := .Context.platform.oidc.tokenUrl -}}
+      {{- $oidcTokenUrl := .Context.oidc.tokenUrl -}}
 
-      {{- $oidcUserInfoUrl := .Context.platform.oidc.userinfoUrl -}}
+      {{- $oidcUserInfoUrl := .Context.oidc.userinfoUrl -}}
 
       {{- $storageApiUrl := .Parameters.storage.apiUrl -}}
 
@@ -232,7 +221,7 @@ modules:
            when kubauth provisions it. Same keys either way, so everything
            below reads it the same. */}}
       {{- $oidcSecret := .Parameters.oidcClientSecretRef -}}
-      {{- if eq .Context.platform.identity.clientProvisioning "kubauth" -}}
+      {{- if eq .Context.identity.clientProvisioning "kubauth" -}}
         {{- $oidcSecret = printf "%s-oidc-creds" .Release.metadata.name -}}
       {{- else if not $oidcSecret -}}
         {{- fail "oidcClientSecretRef is required unless platform.identity.clientProvisioning is kubauth" -}}
@@ -320,7 +309,7 @@ modules:
           type: sqlite-pvc
           pvc:
             storage: 1Gi
-            storageClassName: "{{ .Context.platform.storageClass.workspace }}"
+            storageClassName: "{{ .Context.storageClass.workspace }}"
 
       rbac:
         create: true
@@ -344,7 +333,7 @@ modules:
         enabled: true
         annotations:
           nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-          cert-manager.io/cluster-issuer: "{{ .Context.platform.certificateIssuers.selfSigned.name }}"
+          cert-manager.io/cluster-issuer: "{{ .Context.certificateIssuers.selfSigned.name }}"
         ingressClassName: nginx
         hosts:
           - {{ $jupyterHost }}
@@ -426,14 +415,14 @@ modules:
               fieldRef:
                 fieldPath: status.podIP
 
-          {{- if .Context.platform.proxy.httpProxy }}
-          HTTP_PROXY: {{ .Context.platform.proxy.httpProxy | quote }}
+          {{- if .Context.proxy.httpProxy }}
+          HTTP_PROXY: {{ .Context.proxy.httpProxy | quote }}
           {{- end }}
-          {{- if .Context.platform.proxy.httpsProxy }}
-          HTTPS_PROXY: {{ .Context.platform.proxy.httpsProxy | quote }}
+          {{- if .Context.proxy.httpsProxy }}
+          HTTPS_PROXY: {{ .Context.proxy.httpsProxy | quote }}
           {{- end }}
-          {{- if .Context.platform.proxy.noProxy }}
-          NO_PROXY: {{ .Context.platform.proxy.noProxy | quote }}
+          {{- if .Context.proxy.noProxy }}
+          NO_PROXY: {{ .Context.proxy.noProxy | quote }}
           {{- end }}
 
         {{- if $welcomeNotebook }}

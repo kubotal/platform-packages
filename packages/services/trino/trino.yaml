@@ -14,16 +14,14 @@
 #  limitations under the License.
 #
 
-# Connections wiring: the hive metastore and the S3 backend are connectionRef
-# parameters (values read flat), the S3 identity is a per-consumer s3SecretRef
-# parameter, and the OIDC provider is a platform context variable. One trino
-# Connection is output per instance (kcd-<release>-endpoint).
+# Consumes hive and s3 Connections. Produces one trino Connection per
+# instance (kcd-<release>-endpoint).
 apiVersion: v1alpha1
 name: trino
 #tag: 480-p01
 # Currently, the UI requires the version to conform to SemVer (https://simversion.github.io/)
 # https://github.com/OKDP/okdp-ui/blob/main/src/app/shared/utils/utils.ts#L131
-tag: 480.0.0-p10
+tag: 480.0.0-p11
 protected: false
 description: |
   Apache Trino - Distributed SQL query engine designed for large-scale data processing across multiple data sources.
@@ -32,7 +30,7 @@ description: |
 usage:
   text: |
     Apache Trino provides distributed SQL query engine designed for large-scale data processing.
-    Access the UI at https://trino-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
+    Access the UI at https://trino-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}
 schema:
   parameters:
     properties:
@@ -66,26 +64,23 @@ schema:
       enableDCR: { title: "Authentication | Dynamic client registration | | order:4 advanced:true", type: boolean, default: false, description: "Whether to enable Dynamic Client Registration" }
   context:
     properties:
-      platform:
+      certificateIssuers:
         required: true
         properties:
-          certificateIssuers:
-            required: true
+          selfSigned:
             properties:
-              selfSigned:
-                properties:
-                  name: { type: string, required: true }
-          ingress:
-            required: true
-            properties:
-              suffix: { type: string, required: true }
-          oidc:
-            required: true
-            properties:
-              issuerUri: { type: string, required: true }
-              authUrl: { type: string, required: true }
-              tokenUrl: { type: string, required: true }
-              jwksUri: { type: string, required: true }
+              name: { type: string, required: true }
+      ingress:
+        required: true
+        properties:
+          suffix: { type: string, required: true }
+      oidc:
+        required: true
+        properties:
+          issuerUri: { type: string, required: true }
+          authUrl: { type: string, required: true }
+          tokenUrl: { type: string, required: true }
+          jwksUri: { type: string, required: true }
 
 modules:
   - name: opa
@@ -178,7 +173,7 @@ modules:
 
         extraEnv:
           OPAL_POLICY_REPO_MANIFEST_PATH: "{{ .Parameters.OPAL_POLICY_REPO_MANIFEST_PATH }}"
-          {{- with .Context.platform.proxy }}
+          {{- with .Context.proxy }}
           {{- if or .httpProxy .httpsProxy .noProxy }}
           {{- with .httpProxy }}
           HTTP_PROXY: {{ . | quote }}
@@ -202,9 +197,9 @@ modules:
     values: |
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
-      {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
+      {{- $domain := printf "%v" .Context.ingress.suffix -}}
 
-      {{- $oidcIssuerUri := .Context.platform.oidc.issuerUri -}}
+      {{- $oidcIssuerUri := .Context.oidc.issuerUri -}}
 
       ttl_seconds: 30
       registration_url: "{{ $oidcIssuerUri }}/clients-registrations/openid-connect/"
@@ -241,12 +236,12 @@ modules:
 
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
-      {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
+      {{- $domain := printf "%v" .Context.ingress.suffix -}}
 
-      {{- $oidcIssuerUri := .Context.platform.oidc.issuerUri -}}
-      {{- $oidcAuthUrl := .Context.platform.oidc.authUrl -}}
-      {{- $oidcTokenUrl := .Context.platform.oidc.tokenUrl -}}
-      {{- $oidcJwksUrl := .Context.platform.oidc.jwksUri -}}
+      {{- $oidcIssuerUri := .Context.oidc.issuerUri -}}
+      {{- $oidcAuthUrl := .Context.oidc.authUrl -}}
+      {{- $oidcTokenUrl := .Context.oidc.tokenUrl -}}
+      {{- $oidcJwksUrl := .Context.oidc.jwksUri -}}
 
       {{- $oidcScopes := .Parameters.oidcScope | replace " " "," -}}
 
@@ -397,7 +392,7 @@ modules:
         enabled: true
         className: nginx
         annotations:
-          cert-manager.io/cluster-issuer: "{{ .Context.platform.certificateIssuers.selfSigned.name }}"
+          cert-manager.io/cluster-issuer: "{{ .Context.certificateIssuers.selfSigned.name }}"
           nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
           nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
           nginx.ingress.kubernetes.io/use-regex: "true"
@@ -468,8 +463,8 @@ outputs:
   - name: endpoint
     contract: trino
     values:
-      url: "https://trino-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}"
-      uri: "trino://trino@trino-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}"
+      url: "https://trino-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}"
+      uri: "trino://trino@trino-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}"
       internalUri: "trino://trino@{{ .Release.metadata.name }}-main-trino.{{ .Release.spec.targetNamespace }}.svc.cluster.local:8080"
       catalogs:
         - tpch

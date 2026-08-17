@@ -14,14 +14,12 @@
 #  limitations under the License.
 #
 
-# Connections wiring: the metadata and examples databases are connectionRef
-# parameters (connection type database-server), the OIDC provider is a platform
-# context connection (connection type oidc, OAuth clients stay ordinary Secret name
-# parameters), and trino datasources are a list of per item connectionRefs.
+# Consumes database-server Connections (metadata, examples) and one trino
+# connectionRef per datasource item.
 
 apiVersion: v1alpha1
 name: superset
-tag: 6.0.0-cnx07
+tag: 6.0.0-cnx08
 protected: false
 description: |
   Apache Superset - Enterprise business intelligence platform for modern data teams.
@@ -30,7 +28,7 @@ description: |
 usage:
   text: |
     Apache Superset provides modern data visualization and exploration capabilities.
-    Access the UI at https://superset-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
+    Access the UI at https://superset-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}
 schema:
   parameters:
     properties:
@@ -75,23 +73,20 @@ schema:
             catalog: { type: string, default: hive }
   context:
     properties:
-      platform:
+      oidc:
         required: true
         properties:
-          oidc:
-            required: true
+          issuerUri: { type: string, required: true }
+      certificateIssuers:
+        required: true
+        properties:
+          selfSigned:
             properties:
-              issuerUri: { type: string, required: true }
-          certificateIssuers:
-            required: true
-            properties:
-              selfSigned:
-                properties:
-                  name: { type: string, required: true }
-          ingress:
-            required: true
-            properties:
-              suffix: { type: string, required: true }
+              name: { type: string, required: true }
+      ingress:
+        required: true
+        properties:
+          suffix: { type: string, required: true }
 modules:
   - name: main
     timeout: 10m
@@ -103,13 +98,13 @@ modules:
 
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
-      {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
+      {{- $domain := printf "%v" .Context.ingress.suffix -}}
 
       {{- /* The examples loader is postgresql specific (psycopg2 dialect, main search_path) */ -}}
       {{- $examplesDatabaseJdbcUrl := printf "postgresql+psycopg2://$DB_EXAMPLES_USER:$DB_EXAMPLES_PASS@%s:%v/%s?options=-csearch_path%%3Dmain" .Parameters.examplesDb.host .Parameters.examplesDb.port .Parameters.examplesDb.dbName -}}
 
       {{- /* The oidc connection resolved from the platform context */ -}}
-      {{- $oidcBaseUrl := printf "%s/protocol/openid-connect" .Context.platform.oidc.issuerUri -}}
+      {{- $oidcBaseUrl := printf "%s/protocol/openid-connect" .Context.oidc.issuerUri -}}
 
       {{- $supersetOidcRoleMapping := .Parameters.oidcRoleMapping | default dict }}
 
@@ -261,17 +256,17 @@ modules:
           - name: REQUESTS_CA_BUNDLE
             value: /cacerts/ca.crt
 
-          {{- if .Context.platform.proxy.httpProxy }}
+          {{- if .Context.proxy.httpProxy }}
           - name: HTTP_PROXY
-            value: {{ .Context.platform.proxy.httpProxy | quote }}
+            value: {{ .Context.proxy.httpProxy | quote }}
           {{- end }}
-          {{- if .Context.platform.proxy.httpsProxy }}
+          {{- if .Context.proxy.httpsProxy }}
           - name: HTTPS_PROXY
-            value: {{ .Context.platform.proxy.httpsProxy | quote }}
+            value: {{ .Context.proxy.httpsProxy | quote }}
           {{- end }}
-          {{- if .Context.platform.proxy.noProxy }}
+          {{- if .Context.proxy.noProxy }}
           - name: NO_PROXY
-            value: {{ .Context.platform.proxy.noProxy | quote }}
+            value: {{ .Context.proxy.noProxy | quote }}
           {{- end }}
           # Examples
           {{- if .Parameters.load_examples }}
@@ -371,7 +366,7 @@ modules:
           ingressClassName: "nginx"
           annotations:
             kubernetes.io/ingress.class: nginx
-            cert-manager.io/cluster-issuer: {{ .Context.platform.certificateIssuers.selfSigned.name }}
+            cert-manager.io/cluster-issuer: {{ .Context.certificateIssuers.selfSigned.name }}
             acme.cert-manager.io/http01-edit-in-place: "true"
             # kubernetes.io/tls-acme: "true"
             ## Extend timeout to allow long running queries.

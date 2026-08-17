@@ -14,13 +14,11 @@
 #  limitations under the License.
 #
 
-# Connections wiring: the event log store is an s3 connectionRef parameter (storage),
-# the S3 identity is the ordinary parameter s3SecretRef (Secret keys accessKey/secretKey),
-# and the OIDC provider is a platform context variable (platform.oidc).
-# The OAuth client of this instance is the ordinary parameter oidcClientSecretRef.
+# Consumes one s3 Connection (storage); s3SecretRef and oidcClientSecretRef
+# name this instance's own identities.
 apiVersion: v1alpha1
 name: spark-history-server
-tag: 3.5.1-cnx04
+tag: 3.5.1-cnx05
 protected: false
 description: |
   Spark History Server - Monitoring and debugging interface for Apache Spark applications.
@@ -30,9 +28,9 @@ usage:
   text: |
     Spark History Server provides a web UI for viewing completed Spark applications.
     {{- if .Parameters.enableWebProxy }}
-    Access the UI at https://{{ .Parameters.webProxyUrlPrefix }}-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
+    Access the UI at https://{{ .Parameters.webProxyUrlPrefix }}-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}
     {{- else }}
-    Access the UI at https://spark-history-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
+    Access the UI at https://spark-history-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}
     {{- end }}
 schema:
   parameters:
@@ -62,23 +60,20 @@ schema:
         description: "Spark History Server configuration entries merged as-is (e.g. spark.history.fs.logDirectory, cleaner, s3a and ui filter settings)."
   context:
     properties:
-      platform:
+      certificateIssuers:
         required: true
         properties:
-          certificateIssuers:
-            required: true
+          selfSigned:
             properties:
-              selfSigned:
-                properties:
-                  name: { type: string, required: true }
-          ingress:
-            required: true
-            properties:
-              suffix: { type: string, required: true }
-          oidc:
-            required: true
-            properties:
-              issuerUri: { type: string, required: true }
+              name: { type: string, required: true }
+      ingress:
+        required: true
+        properties:
+          suffix: { type: string, required: true }
+      oidc:
+        required: true
+        properties:
+          issuerUri: { type: string, required: true }
 modules:
   - name: main
     timeout: 10m
@@ -89,9 +84,9 @@ modules:
     values: |
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
-      {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
+      {{- $domain := printf "%v" .Context.ingress.suffix -}}
 
-      {{- $oidcIssuerUri := .Context.platform.oidc.issuerUri -}}
+      {{- $oidcIssuerUri := .Context.oidc.issuerUri -}}
       {{- $oidcRoleMapping := .Parameters.roleMapping | default dict -}}
       {{- if not (kindIs "map" $oidcRoleMapping) }}
         {{- fail "parameters.roleMapping must be a map" -}}
@@ -136,7 +131,7 @@ modules:
         ingressClassName: "nginx"
         annotations:
           nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-          cert-manager.io/cluster-issuer: {{ .Context.platform.certificateIssuers.selfSigned.name }}
+          cert-manager.io/cluster-issuer: {{ .Context.certificateIssuers.selfSigned.name }}
         hosts:
           - host: {{ $historyEndpointHost }}
             paths:
@@ -221,7 +216,7 @@ modules:
         tag: 0.1.0
     values: |
 
-      {{- $webProxyEndpointHost := printf "%s-%s.%s" .Parameters.webProxyUrlPrefix .Release.spec.targetNamespace .Context.platform.ingress.suffix -}}
+      {{- $webProxyEndpointHost := printf "%s-%s.%s" .Parameters.webProxyUrlPrefix .Release.spec.targetNamespace .Context.ingress.suffix -}}
 
       image:
         repository: quay.io/okdp/spark-web-proxy
@@ -242,7 +237,7 @@ modules:
         className: "nginx"
         annotations:
           nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-          cert-manager.io/cluster-issuer: {{ .Context.platform.certificateIssuers.selfSigned.name }}
+          cert-manager.io/cluster-issuer: {{ .Context.certificateIssuers.selfSigned.name }}
         hosts:
           - host: {{ $webProxyEndpointHost }}
             paths:

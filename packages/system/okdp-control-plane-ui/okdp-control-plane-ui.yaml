@@ -16,14 +16,14 @@
 
 apiVersion: v1alpha1
 name: okdp-control-plane-ui
-tag: 0.8.0-cnx02
+tag: 0.8.0-cnx03
 protected: false
 description: |
   OKDP UI - Frontend web interface for the Open Kubernetes Data Platform
 usage:
   text: |
     Access the console at
-    https://{{ .Parameters.host | default (printf "okdp-ui.%s" .Context.platform.ingress.suffix) }}
+    https://{{ .Parameters.host | default (printf "okdp-ui.%s" .Context.ingress.suffix) }}
     The same ingress routes /api to the okdp-server Service, so the browser
     never leaves the origin and the API is never exposed on its own host.
 schema:
@@ -40,19 +40,16 @@ schema:
       backendPort: { type: integer, default: 8093 }
   context:
     properties:
-      platform:
+      ingress:
         required: true
         properties:
-          ingress:
-            required: true
+          suffix: { type: string, required: true }
+      certificateIssuers:
+        required: true
+        properties:
+          selfSigned:
             properties:
-              suffix: { type: string, required: true }
-          certificateIssuers:
-            required: true
-            properties:
-              selfSigned:
-                properties:
-                  name: { type: string, required: true }
+              name: { type: string, required: true }
 modules:
   - name: main
     timeout: 10m
@@ -61,7 +58,7 @@ modules:
         repository: ghcr.io/kubotal/charts/okdp-control-plane-ui
         tag: 0.8.0
     values: |
-      {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
+      {{- $domain := printf "%v" .Context.ingress.suffix -}}
       {{- $host := .Parameters.host | default (printf "okdp-ui.%s" $domain) -}}
 
       image:
@@ -83,7 +80,7 @@ modules:
       ingress:
         className: nginx
         host: {{ $host | quote }}
-        clusterIssuer: {{ .Context.platform.certificateIssuers.selfSigned.name | quote }}
+        clusterIssuer: {{ .Context.certificateIssuers.selfSigned.name | quote }}
         tlsSecretName: okdp-ui-tls
 roles:
   - okdp-ui

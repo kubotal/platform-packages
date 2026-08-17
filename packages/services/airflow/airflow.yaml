@@ -1,10 +1,8 @@
-# Connections wiring: consumes db (connection type database-server) as a connectionRef
-# parameter gating the metadata database, the chart reads the assembled connection
-# string Secret named by the metadataSecret parameter. OIDC comes from the platform
-# connection platform.oidc, the OAuth client secret is a parameter.
+# Consumes db (database-server) as a deployment gate only: the chart reads
+# the connection string from the Secret named by metadataSecret.
 apiVersion: v1alpha1
 name: airflow
-tag: 3.2.1-cnx03
+tag: 3.2.1-cnx04
 protected: false
 description: |
   Apache Airflow 2.9.3 - Workflow orchestration platform with Spark Operator integration
@@ -15,31 +13,28 @@ usage:
     Pods, ingress, and certificate provisioning may still take a few minutes.
 
     Access the Airflow UI:
-      URL: https://airflow-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
+      URL: https://airflow-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}
       Authenticate via the configured OIDC provider.
 
 schema:
   context:
     properties:
-      platform:
+      certificateIssuers:
         required: true
         properties:
-          certificateIssuers:
-            required: true
+          selfSigned:
             properties:
-              selfSigned:
-                properties:
-                  name: { type: string, required: true }
-          ingress:
-            required: true
-            properties:
-              suffix: { type: string, required: true }
-          oidc:
-            required: true
-            properties:
-              issuerUri: { type: string, required: true }
-              authUrl: { type: string, required: true }
-              tokenUrl: { type: string, required: true }
+              name: { type: string, required: true }
+      ingress:
+        required: true
+        properties:
+          suffix: { type: string, required: true }
+      oidc:
+        required: true
+        properties:
+          issuerUri: { type: string, required: true }
+          authUrl: { type: string, required: true }
+          tokenUrl: { type: string, required: true }
   parameters:
     properties:
       db: { type: connectionRef, contract: database-server, required: true, title: "Cluster | Metadata database | | order:2", description: "Connection to the SQL database server hosting the Airflow metadata database." }
@@ -73,7 +68,7 @@ modules:
 
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
-      {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
+      {{- $domain := printf "%v" .Context.ingress.suffix -}}
       {{- $airflowHost := printf "airflow-%s.%s" $namespace $domain -}}
       {{- $airflowGitSync := .Parameters.dagsGitSync | default dict }}
       {{- $airflowGitSyncValues := omit $airflowGitSync "credentialsSecret" }}
@@ -84,7 +79,7 @@ modules:
       {{- $airflowOidcTokenUrl := "" }}
       {{- $airflowOidcIssuerUri := "" }}
       {{- if $airflowOidcEnabled }}
-        {{- $oidc := .Context.platform.oidc -}}
+        {{- $oidc := .Context.oidc -}}
         {{- $airflowOidcBaseUrl = printf "%s/protocol/openid-connect" $oidc.issuerUri -}}
         {{- $airflowOidcAuthUrl = $oidc.authUrl -}}
         {{- $airflowOidcTokenUrl = $oidc.tokenUrl -}}
@@ -213,7 +208,7 @@ modules:
           ingressClassName: nginx
           annotations:
             kubernetes.io/ingress.class: nginx
-            cert-manager.io/cluster-issuer: {{ .Context.platform.certificateIssuers.selfSigned.name }}
+            cert-manager.io/cluster-issuer: {{ .Context.certificateIssuers.selfSigned.name }}
             nginx.ingress.kubernetes.io/proxy-body-size: "0"
 
           hosts:
@@ -237,19 +232,19 @@ modules:
           {{- with $airflowGitSync.credentialsSecret }}
           credentialsSecret: {{ required "dagsGitSync.credentialsSecret.name is required" .name | quote }}
           {{- end }}
-          {{- if or .Context.platform.proxy.httpProxy .Context.platform.proxy.httpsProxy .Context.platform.proxy.noProxy }}
+          {{- if or .Context.proxy.httpProxy .Context.proxy.httpsProxy .Context.proxy.noProxy }}
           env:
-            {{- if .Context.platform.proxy.httpProxy }}
+            {{- if .Context.proxy.httpProxy }}
             - name: HTTP_PROXY
-              value: {{ .Context.platform.proxy.httpProxy | quote }}
+              value: {{ .Context.proxy.httpProxy | quote }}
             {{- end }}
-            {{- if .Context.platform.proxy.httpsProxy }}
+            {{- if .Context.proxy.httpsProxy }}
             - name: HTTPS_PROXY
-              value: {{ .Context.platform.proxy.httpsProxy | quote }}
+              value: {{ .Context.proxy.httpsProxy | quote }}
             {{- end }}
-            {{- if .Context.platform.proxy.noProxy }}
+            {{- if .Context.proxy.noProxy }}
             - name: NO_PROXY
-              value: {{ .Context.platform.proxy.noProxy | quote }}
+              value: {{ .Context.proxy.noProxy | quote }}
             {{- end }}
           {{- end }}
 
