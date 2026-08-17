@@ -19,7 +19,7 @@
 
 apiVersion: v1alpha1
 name: jupyterhub
-tag: 4.3.3-cnx06
+tag: 4.3.3-cnx07
 protected: false
 description: |
   JupyterHub - Multi-user interactive development environment for data science and machine learning.
@@ -333,6 +333,9 @@ modules:
         enabled: true
         annotations:
           nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+          # Notebook saves ship their embedded outputs: the nginx 1m default
+          # rejects them with a 413.
+          nginx.ingress.kubernetes.io/proxy-body-size: "64m"
           cert-manager.io/cluster-issuer: "{{ .Context.certificateIssuers.selfSigned.name }}"
         ingressClassName: nginx
         hosts:
