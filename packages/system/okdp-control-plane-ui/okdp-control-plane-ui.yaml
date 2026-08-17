@@ -16,7 +16,7 @@
 
 apiVersion: v1alpha1
 name: okdp-control-plane-ui
-tag: 0.8.0-cnx01
+tag: 0.8.0-cnx02
 protected: false
 description: |
   OKDP UI - Frontend web interface for the Open Kubernetes Data Platform
@@ -36,7 +36,7 @@ schema:
       oidcClientId: { type: string, default: "okdp-ui" }
       rolesClaim: { type: string, default: "groups", description: "Claim of the ID token carrying the caller's roles. Dotted paths are resolved. Keycloak keeps realm_access out of the ID token, hence groups." }
       adminRole: { type: string, default: "platform_admin", description: "Role that opens the administration screens." }
-      backendService: { type: string, default: "okdp-server-main", description: "In-cluster Service the ingress routes /api to. KuboCD names a Service <release>-<module>, hence the -main suffix when the server Release is named okdp-server." }
+      backendService: { type: string, default: "okdp-control-plane-server-main", description: "In-cluster Service the ingress routes /api to. KuboCD names a Service <release>-<module>, hence the -main suffix when the server Release is named okdp-control-plane-server." }
       backendPort: { type: integer, default: 8093 }
   context:
     properties:
