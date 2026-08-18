@@ -19,7 +19,7 @@
 
 apiVersion: v1alpha1
 name: superset
-tag: 6.0.0-cnx11
+tag: 6.0.0-cnx12
 protected: false
 description: |
   Apache Superset - Enterprise business intelligence platform for modern data teams.
@@ -33,7 +33,6 @@ schema:
   parameters:
     properties:
       load_examples: { type: boolean, default: true, title: "Cluster | Load examples | | order:2", description: "Whether to load superset examples" }
-      adminUser: { type: string, default: "admin", title: "Admin | Username | | order:1" }
       cpu: { type: number, default: 0.5, multipleOf: 0.25, title: "Sizing | CPU (vCPU) | | order:1 columns:2 advanced:true" }
       memoryGi: { type: number, default: 2, multipleOf: 0.25, title: "Sizing | Memory (GiB) | | order:2 columns:2 advanced:true" }
       workers: { type: integer, default: 2, title: "Sizing | Server workers | stepper | order:3 advanced:true" }
@@ -42,9 +41,6 @@ schema:
       # Database hosting the superset examples (used when load_examples is true)
       examplesDb: { title: "Cluster | Examples database | | order:3", type: connectionRef, contract: database-server, required: true }
       # Secret Key for Superset's Flask App. Secret with key: superset_secret_key
-      # External redis. Host defaults to the redis bundled by the chart
-      # Secret with keys: username, password
-      redisSecretRef: { title: "Cluster | Redis credentials secret | | order:7", type: string, required: true }
       # OAuth client of THIS instance. The provider comes from the platform context
       # Secret with keys: client_id, client_secret
       # Map of OIDC roles to lists of superset roles
@@ -92,6 +88,10 @@ modules:
             - fieldName: superset_secret_key
               encoding: base64
               length: "42"
+            # hex: the password lands in a redis:// URL, where base64 padding would need escaping.
+            - fieldName: redis-password
+              encoding: hex
+              length: "32"
   - name: main
     timeout: 10m
     source:
@@ -211,8 +211,9 @@ modules:
           enabled: true
           architecture: standalone
           auth:
-            ## Enable password authentication
-            enabled: false
+            enabled: true
+            existingSecret: {{ printf "creds-%s-internal" $release }}
+            existingSecretPasswordKey: redis-password
         extraEnvRaw:
           # Superset secret key
           - name: SUPERSET_SECRET_KEY
@@ -232,16 +233,11 @@ modules:
                 name: {{ .Parameters.metadataDb.secretRef }}
                 key: password
           # Superset/Redis credentials
-          - name: REDIS_USER
-            valueFrom:
-              secretKeyRef:
-                name: {{ .Parameters.redisSecretRef }}
-                key: username
           - name: REDIS_PASSWORD
             valueFrom:
               secretKeyRef:
-                name: {{ .Parameters.redisSecretRef }}
-                key: password
+                name: {{ printf "creds-%s-internal" $release }}
+                key: redis-password
           {{- if $oidcEnabled }}
           # OIDC credentials
           - name: AUTH_OAUTH_CLIENT_ID
@@ -306,8 +302,7 @@ modules:
         # databases existing: the schema upgrade then fails on a database not
         # created yet, and the job burns its retries.
         init:
-          adminUser:
-            username: "{{ .Parameters.adminUser }}"
+          createAdmin: false
           initContainers:
             - name: wait-for-databases
               image: postgres:16-alpine
@@ -368,7 +363,9 @@ modules:
             redis_host: {{ printf "%s-main-redis-headless" $release | quote }}
             redis_port: 6379
             redis_user: ~
-            redis_password: ~
+            # Flag only: the chart switches the URL to its authenticated form,
+            # which reads the value from the REDIS_PASSWORD variable below.
+            redis_password: "set-from-env"
             redis_cache_db: "1"
             redis_celery_db: "0"
             redis_ssl:

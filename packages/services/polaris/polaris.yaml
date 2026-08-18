@@ -18,7 +18,7 @@
 # iceberg-catalog Connection (output catalog).
 apiVersion: v1alpha1
 name: polaris
-tag: 1.3.0-incubating-cnx08
+tag: 1.3.0-incubating-cnx09
 protected: false
 description: |
   Apache Polaris is an open-source, fully-featured catalog for Apache Iceberg™.
@@ -37,12 +37,11 @@ schema:
         title: "Catalog | Realms | | order:3"
         type: array
         required: true
-        description: "Realm definitions passed to the bootstrap, main and principals modules."
+        description: "Realm definitions passed to the bootstrap, main and principals modules. The first one is the default realm, published on the catalog Connection and preselected in the console."
         items:
           properties:
             name: { type: string, required: true }
           additionalProperties: true
-      defaultRealm: { title: "Catalog | Default realm | | order:4 columns:2", type: string, required: true, description: "Realm published on the catalog Connection and preselected in the console." }
   context:
     properties:
       oidc:
@@ -353,7 +352,7 @@ modules:
 
       env:
         polarisApiUrl: "{{ $polarisEndpointAPIUrl }}"
-        polarisRealm: "{{ .Parameters.defaultRealm }}"
+        polarisRealm: "{{ (index .Parameters.realms 0).name }}"
         oauthTokenUrl: "{{ $polarisEndpointAPIUrl }}/api/catalog/v1/oauth/tokens"
 
       extraEnv:
@@ -383,7 +382,7 @@ outputs:
     contract: iceberg-catalog
     values:
       uri: "https://polaris-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}/api/catalog"
-      realm: "{{ .Parameters.defaultRealm }}"
+      realm: "{{ (index .Parameters.realms 0).name }}"
 roles:
   - data-catalog
   - iceberg-catalog
