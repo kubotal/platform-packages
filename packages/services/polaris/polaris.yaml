@@ -18,7 +18,7 @@
 # iceberg-catalog Connection (output catalog).
 apiVersion: v1alpha1
 name: polaris
-tag: 1.3.0-incubating-cnx06
+tag: 1.3.0-incubating-cnx07
 protected: false
 description: |
   Apache Polaris is an open-source, fully-featured catalog for Apache Iceberg™.
@@ -30,11 +30,10 @@ schema:
   parameters:
     properties:
       purge: { type: boolean, default: false, title: "Catalog | Purge realms | | order:3 advanced:true", description: "Whether to purge realms and all associated entities." }
-      memory: { type: string, default: "1Gi", title: "Resources | Memory limit | | order:1 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
+      memoryGi: { type: number, default: 1, multipleOf: 0.25, title: "Sizing | Memory (GiB) | | order:1 columns:2 advanced:true" }
       db: { title: "Catalog | Metadata database | | order:1", type: connectionRef, contract: database-server, required: true, description: "Connection to the PostgreSQL server hosting the Polaris metastore database." }
       storage: { title: "Storage | Object store | | order:1", type: connectionRef, contract: s3, required: true, description: "Connection to the S3-compatible object store backing the catalogs." }
       s3SecretRef: { title: "Storage | S3 credentials secret | | order:2", type: string, required: true, description: "Secret with keys accessKey/secretKey, this consumer's own S3 identity (STS and catalog-side Iceberg metadata operations)." }
-      oidcClientSecretRef: { title: "Catalog | OIDC client secret | | order:2 advanced:true", type: string, description: "Secret with keys client_id/client_secret, the OAuth client of this Polaris instance. Defaults to creds-<release>-oauth2." }
       realms:
         title: "Catalog | Realms | | order:3"
         type: array
@@ -122,7 +121,7 @@ modules:
 
       resources:
         limits:
-          memory: "{{ .Parameters.memory }}"
+          memory: "{{ .Parameters.memoryGi }}Gi"
         requests:
           memory: "512Mi"
 
@@ -168,7 +167,7 @@ modules:
         - name: QUARKUS_OIDC_CLIENT_ID
           valueFrom:
             secretKeyRef:
-              name: {{ .Parameters.oidcClientSecretRef | default (printf "creds-%s-oauth2" .Release.metadata.name) }}
+              name: {{ printf "creds-%s-oauth2" .Release.metadata.name }}
               key: client_id
         # Trust The CA
         - name: JAVA_TOOL_OPTIONS
@@ -210,7 +209,7 @@ modules:
         client:
           id: ~
           secret:
-            name: {{ .Parameters.oidcClientSecretRef | default (printf "creds-%s-oauth2" .Release.metadata.name) }}
+            name: {{ printf "creds-%s-oauth2" .Release.metadata.name }}
             key: client_secret
 
         # Map polaris internal principal and roles with OIDC principal and roles

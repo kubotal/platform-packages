@@ -19,7 +19,7 @@
 
 apiVersion: v1alpha1
 name: superset
-tag: 6.0.0-cnx09
+tag: 6.0.0-cnx10
 protected: false
 description: |
   Apache Superset - Enterprise business intelligence platform for modern data teams.
@@ -34,9 +34,9 @@ schema:
     properties:
       load_examples: { type: boolean, default: true, title: "Cluster | Load examples | | order:2", description: "Whether to load superset examples" }
       adminUser: { type: string, default: "admin", title: "Admin | Username | | order:1" }
-      memory: { type: string, default: "2Gi", title: "Resources | Memory | | order:1 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
-      cpu: { type: string, default: "500m", title: "Resources | CPU | | order:2 columns:2 advanced:true placeholder:\"e.g. 500m, 1\"" }
-      workers: { type: integer, default: 2, title: "Resources | Gunicorn workers | stepper | order:3 advanced:true" }
+      cpu: { type: number, default: 0.5, multipleOf: 0.25, title: "Sizing | CPU (vCPU) | | order:1 columns:2 advanced:true" }
+      memoryGi: { type: number, default: 2, multipleOf: 0.25, title: "Sizing | Memory (GiB) | | order:2 columns:2 advanced:true" }
+      workers: { type: integer, default: 2, title: "Sizing | Server workers | stepper | order:3 advanced:true" }
       # Superset metadata database
       metadataDb: { type: connectionRef, contract: database-server, required: true, title: "Cluster | Metadata database | | order:1" }
       # Database hosting the superset examples (used when load_examples is true)
@@ -48,11 +48,9 @@ schema:
       redisSecretRef: { title: "Cluster | Redis credentials secret | | order:7", type: string, required: true }
       # OAuth client of THIS instance. The provider comes from the platform context
       # Secret with keys: client_id, client_secret
-      oidcClientSecretRef: { title: "Authentication | OIDC client secret | | order:1 advanced:true", type: string, description: "OAuth client of this instance. Secret with keys: client_id, client_secret. Defaults to creds-<release>-oauth2." }
       # Map of OIDC roles to lists of superset roles
       oidcRoleMapping: { title: "Authentication | Role mapping | | order:6 advanced:true", type: object, properties: {}, additionalProperties: true }
       # Secret with keys: client_id, client_secret
-      trinoOidcClientSecretRef: { title: "Datasources | Trino OAuth client secret | | order:3 advanced:true", type: string, description: "OAuth client used against Trino from SQL Lab. Secret with keys: client_id, client_secret. Defaults to creds-<release>-oauth2-trino." }
       # Datasources: one list, each element wires its own trino connection and
       # its catalog. The name is the display name in the Superset UI
       datasources:
@@ -100,8 +98,8 @@ modules:
       {{- if hasKey .Context.oidc "usePKCE" }}{{- $oidcUsePKCE = .Context.oidc.usePKCE -}}{{ end -}}
       {{- $oidcScope := .Context.oidc.scope | default "openid profile email groups" -}}
       {{- $oidcDisplayName := .Context.oidc.displayName | default "keycloak" -}}
-      {{- $oauthSecret := .Parameters.oidcClientSecretRef | default (printf "creds-%s-oauth2" $release) -}}
-      {{- $trinoOauthSecret := .Parameters.trinoOidcClientSecretRef | default (printf "creds-%s-oauth2-trino" $release) -}}
+      {{- $oauthSecret := printf "creds-%s-oauth2" $release -}}
+      {{- $trinoOauthSecret := printf "creds-%s-oauth2-trino" $release -}}
       {{- $domain := printf "%v" .Context.ingress.suffix -}}
 
       {{- /* The examples loader is postgresql specific (psycopg2 dialect, main search_path) */ -}}
@@ -346,7 +344,7 @@ modules:
         supersetNode:
           resources:
             limits:
-              memory: "{{ .Parameters.memory }}"
+              memory: "{{ .Parameters.memoryGi }}Gi"
               cpu: "{{ .Parameters.cpu }}"
           # Connections to an existing database and cache
           connections:

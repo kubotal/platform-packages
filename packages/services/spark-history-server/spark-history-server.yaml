@@ -18,7 +18,7 @@
 # name this instance's own identities.
 apiVersion: v1alpha1
 name: spark-history-server
-tag: 3.5.1-cnx07
+tag: 3.5.1-cnx08
 protected: false
 description: |
   Spark History Server - Monitoring and debugging interface for Apache Spark applications.
@@ -27,21 +27,14 @@ description: |
 usage:
   text: |
     Spark History Server provides a web UI for viewing completed Spark applications.
-    {{- if .Parameters.enableWebProxy }}
-    Access the UI at https://{{ .Parameters.webProxyUrlPrefix }}-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}
-    {{- else }}
-    Access the UI at https://spark-history-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}
-    {{- end }}
+    Access the UI at https://spark-web-proxy-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}
 schema:
   parameters:
     properties:
-      enableWebProxy: { type: boolean, default: true, title: "Cluster | Enable web proxy | | order:1", description: "Whether to enable Spark History web proxy" }
-      resourceCpu: { type: string, default: "500m", title: "Resources | CPU limit | | order:2 columns:2 advanced:true placeholder:\"e.g. 500m, 1\"" }
-      resourceMemory: { type: string, default: "1Gi", title: "Resources | Memory limit | | order:1 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
-      webProxyUrlPrefix: { title: "Cluster | Web proxy URL prefix | | order:2 advanced:true condition:enableWebProxy=true", type: string, default: "spark-web-proxy", description: "Spark web proxy url prefix" }
+      cpu: { type: number, default: 0.5, multipleOf: 0.25, title: "Sizing | CPU (vCPU) | | order:1 columns:2 advanced:true" }
+      memoryGi: { type: number, default: 1, multipleOf: 0.25, title: "Sizing | Memory (GiB) | | order:2 columns:2 advanced:true" }
       storage: { title: "Storage | Event log store | | order:1", type: connectionRef, contract: s3, required: true, description: "Connection to the S3-compatible object store holding the Spark event logs." }
       s3SecretRef: { title: "Storage | S3 credentials secret | | order:2", type: string, required: true, description: "Secret with keys accessKey/secretKey, this consumer's own S3 identity." }
-      oidcClientSecretRef: { title: "Authentication | OIDC client secret | | order:1 advanced:true", type: string, description: "OAuth client of this instance. Secret with keys: client_id, client_secret. Defaults to creds-<release>-oauth2." }
       roleMapping:
         title: "Authentication | Role mapping | | order:4 advanced:true"
         description: "OIDC group to Spark ACL mapping (keys admin_groups, history_admin_groups, modify_groups, view_groups)."
@@ -101,11 +94,11 @@ modules:
       {{- $historyEndpointUrl := printf "https://spark-history-%s.%s" $namespace $domain -}}
       {{- $historyEndpointHost := printf "spark-history-%s.%s" $namespace $domain -}}
 
-      {{- $webProxyEndpointUrl := printf "https://%s-%s.%s" .Parameters.webProxyUrlPrefix $namespace $domain -}}
+      {{- $webProxyEndpointUrl := printf "https://%s-%s.%s" "spark-web-proxy" $namespace $domain -}}
 
       {{- $historyRedirectUri := $historyEndpointUrl -}}
 
-      {{- if .Parameters.enableWebProxy }}
+      {{- if true }}
       {{- $historyRedirectUri := $webProxyEndpointUrl -}}
       {{- end }}
       {{- $sparkHistoryExtraConfig := (.Parameters.config | default dict) -}}
@@ -120,8 +113,8 @@ modules:
 
       resources:
         limits:
-          cpu: "{{ .Parameters.resourceCpu }}"
-          memory: "{{ .Parameters.resourceMemory }}"
+          cpu: "{{ .Parameters.cpu }}"
+          memory: "{{ .Parameters.memoryGi }}Gi"
         requests:
           cpu: "250m"
           memory: "512Mi"
@@ -190,12 +183,12 @@ modules:
         - name: AUTH_CLIENT_ID
           valueFrom:
             secretKeyRef:
-              name: {{ .Parameters.oidcClientSecretRef | default (printf "creds-%s-oauth2" .Release.metadata.name) }}
+              name: {{ printf "creds-%s-oauth2" .Release.metadata.name }}
               key: client_id
         - name: AUTH_CLIENT_SECRET
           valueFrom:
             secretKeyRef:
-              name: {{ .Parameters.oidcClientSecretRef | default (printf "creds-%s-oauth2" .Release.metadata.name) }}
+              name: {{ printf "creds-%s-oauth2" .Release.metadata.name }}
               key: client_secret
 
       extraVolumes:
@@ -217,7 +210,7 @@ modules:
         tag: 0.1.0
     values: |
 
-      {{- $webProxyEndpointHost := printf "%s-%s.%s" .Parameters.webProxyUrlPrefix .Release.spec.targetNamespace .Context.ingress.suffix -}}
+      {{- $webProxyEndpointHost := printf "%s-%s.%s" "spark-web-proxy" .Release.spec.targetNamespace .Context.ingress.suffix -}}
 
       image:
         repository: quay.io/okdp/spark-web-proxy

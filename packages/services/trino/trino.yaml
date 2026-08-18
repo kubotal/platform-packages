@@ -21,7 +21,7 @@ name: trino
 #tag: 480-p01
 # Currently, the UI requires the version to conform to SemVer (https://simversion.github.io/)
 # https://github.com/OKDP/okdp-ui/blob/main/src/app/shared/utils/utils.ts#L131
-tag: 480.0.0-p14
+tag: 480.0.0-p15
 protected: false
 description: |
   Apache Trino - Distributed SQL query engine designed for large-scale data processing across multiple data sources.
@@ -37,7 +37,6 @@ schema:
       metastore: { title: "Catalogs | Hive metastore | | order:1", type: connectionRef, contract: hive, required: true, description: "Hive metastore connection backing the hive catalog." }
       storage: { title: "Catalogs | Object store | | order:2", type: connectionRef, contract: s3, required: true, description: "S3 object store connection backing the hive catalog." }
       s3SecretRef: { title: "Catalogs | S3 credentials secret | | order:3", type: string, required: true, description: "This instance's own S3 identity. Secret with keys: accessKey, secretKey." }
-      oidcClientSecretRef: { title: "Authentication | OIDC client secret | | order:1 advanced:true", type: string, description: "OAuth client of this instance. Secret with keys: client_id, client_secret. Defaults to creds-<release>-oauth2. Ignored when enableDCR is true." }
       sharedSecretRef: { title: "Authentication | Internal shared secret | | order:3", type: string, required: true, description: "Trino internal communication shared secret. Secret with key: shared-secret." }
       hiveCatalog: { title: "Catalogs | Hive catalog name | | order:4 columns:2", type: string, default: hive, description: "Name of the hive catalog." }
       icebergCatalogs:
@@ -52,10 +51,10 @@ schema:
             oidcSecretRef: { type: string, description: "OAuth client Trino uses against this catalog. Secret with keys: client_id, client_secret. Defaults to creds-<release>-oauth2." }
             oauth2Scope: { type: string, default: "PRINCIPAL_ROLE:ALL", description: "OAuth2 scope requested. Polaris rejects the connector default." }
       allowAuthOverHttp: { title: "Authentication | Allow auth over HTTP | | order:7 advanced:true", type: boolean, default: false, description: "Accept authenticated calls over plain HTTP. Needed by in-cluster clients that reach the coordinator service directly, such as Superset." }
-      numWorkers: { type: integer, default: 1, title: "Cluster | Workers | stepper | order:1 columns:2", description: "Number of workers" }
-      workerMemoryGi: { type: number, default: 2, multipleOf: 0.25, title: "Cluster | Worker memory (GiB) | | order:3 columns:2", description: "Worker memory (GiB) used for Kubernetes requests/limits (recommended: request=limit)." }
-      workerCpu: { type: number, default: 0.5, multipleOf: 0.25, title: "Cluster | Worker CPU (vCPU) | | order:2 columns:2", description: "Worker CPU request in millicores (e.g., 500=0.5 vCPU, 1000=1 vCPU)." }
-      coordinatorMemory: { type: string, default: "8Gi", title: "Cluster | Coordinator memory | | order:4 columns:2 advanced:true placeholder:\"e.g. 2Gi, 8Gi\"" }
+      numWorkers: { type: integer, default: 1, title: "Sizing | Workers | stepper | order:1 columns:2 advanced:true", description: "Number of workers" }
+      workerCpu: { type: number, default: 0.5, multipleOf: 0.25, title: "Sizing | Worker CPU (vCPU) | | order:2 columns:2 advanced:true", description: "Worker CPU request in vCPU." }
+      workerMemoryGi: { type: number, default: 2, multipleOf: 0.25, title: "Sizing | Worker memory (GiB) | | order:3 columns:2 advanced:true", description: "Worker memory (GiB) used for Kubernetes requests/limits (recommended: request=limit)." }
+      coordinatorMemoryGi: { type: number, default: 8, multipleOf: 0.25, title: "Sizing | Coordinator memory (GiB) | | order:4 columns:2 advanced:true" }
       enableOPA: { title: "Authorization | Enable OPA | | order:1", type: boolean, default: true, description: "Whether to enable OPA." }
       enableOPAL: { title: "Authorization | Enable OPAL | | order:3 condition:enableOPA=true", type: boolean, default: false, description: "Whether to enable OPAL. When false, OPA policies are loaded from labeled ConfigMaps by the kube-mgmt sidecar." }
       enableOPADebugLogs: { title: "Authorization | Debug logs | | order:8 advanced:true condition:enableOPA=true", type: boolean, default: false, description: "Log OPA status and decision logs to the container console. Verbose, intended for debugging." }
@@ -64,9 +63,6 @@ schema:
       OPAL_POLICY_SUBSCRIPTION_DIRS: { title: "Authorization | Policy directories | | order:6 advanced:true condition:enableOPAL=true",type: string, default: "trino_opa_policy", description: "Policy directories in the repository for which the client will subscribe to, seperated by ':'."}
       OPAL_POLICY_REPO_MANIFEST_PATH: { title: "Authorization | Policy manifest path | | order:7 advanced:true condition:enableOPAL=true", type: string, default: "trino_opa_policy", description: "The location of the manifest file in the remote repository."}
       opaPolicyPath: { title: "Authorization | Policy path | | order:2 advanced:true condition:enableOPA=true",type: string, default: "v1/data/trino/allow", description: "Path of the OPA policies for Trino used in the Trino variable opa.policy.uri."}
-      defaultclientScopes: { title: "Authentication | Default client scopes | | order:5 advanced:true condition:enableDCR=true", type: string, default: "web-origins acr roles profile groups basic email", description: "Default Trino client's clientScopes" }
-      optionalClientScopes: { title: "Authentication | Optional client scopes | | order:6 advanced:true condition:enableDCR=true", type: string, default: "address phone organization offline_access microprofile-jwt", description: "Optional Trino client's clientScopes" }
-      enableDCR: { title: "Authentication | Dynamic client registration | | order:4 advanced:true", type: boolean, default: false, description: "Whether to enable Dynamic Client Registration" }
   context:
     properties:
       certificateIssuers:
@@ -194,7 +190,7 @@ modules:
           {{- end }}
 
   - name: oidc-dcr
-    enabled: "{{ .Parameters.enableDCR }}"
+    enabled: '{{ eq (.Context.oidc.clientProvisioning | default "existing") "dcr" }}'
     timeout: 10m
     source:
       oci:
@@ -250,7 +246,8 @@ modules:
       {{- $oidcJwksUrl := .Context.oidc.jwksUri -}}
 
       {{- $oidcScopes := (.Context.oidc.scope | default "openid profile email groups") | replace " " "," -}}
-      {{- $oauthSecret := .Parameters.oidcClientSecretRef | default (printf "creds-%s-oauth2" $release) -}}
+      {{- $oauthSecret := printf "creds-%s-oauth2" $release -}}
+      {{- $enableDCR := eq (.Context.oidc.clientProvisioning | default "existing") "dcr" -}}
 
       {{- $trinoEndpoint := printf "trino-%s.%s" $namespace $domain -}}
 
@@ -292,7 +289,7 @@ modules:
         - name: TRINO_OAUTH_CLIENT_ID
           valueFrom:
             secretKeyRef:
-              {{- if .Parameters.enableDCR }}
+              {{- if $enableDCR }}
               name: {{ $release }}-{{ $namespace }}-dcr
               key: OIDC_CLIENT_ID
               {{- else }}
@@ -303,7 +300,7 @@ modules:
         - name: TRINO_OAUTH_CLIENT_SECRET
           valueFrom:
             secretKeyRef:
-              {{- if .Parameters.enableDCR }}
+              {{- if $enableDCR }}
               name: {{ $release }}-{{ $namespace }}-dcr
               key: OIDC_CLIENT_SECRET
               {{- else }}
@@ -358,7 +355,7 @@ modules:
             memory: "1Gi"
           limits:
             cpu: "2"
-            memory: "{{ .Parameters.coordinatorMemory }}"
+            memory: "{{ .Parameters.coordinatorMemoryGi }}Gi"
 
         additionalVolumes:
           - name: cacerts

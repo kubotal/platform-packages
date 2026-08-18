@@ -2,7 +2,7 @@
 # the connection string from the Secret named by metadataSecret.
 apiVersion: v1alpha1
 name: airflow
-tag: 3.2.1-cnx06
+tag: 3.2.1-cnx07
 protected: false
 description: |
   Apache Airflow 2.9.3 - Workflow orchestration platform with Spark Operator integration
@@ -46,9 +46,8 @@ schema:
       # CeleryExecutor is left out: it needs a broker and workers, and this package
       # pins workers.replicas to 0 with no Redis.
       executor: { type: string, default: "KubernetesExecutor", enum: ["KubernetesExecutor", "LocalExecutor"], title: "Cluster | Executor | | order:1" }
-      schedulerMemory: { type: string, default: "1024Mi", title: "Resources | Scheduler memory limit | | order:1 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
-      webserverMemory: { type: string, default: "1024Mi", title: "Resources | API server memory limit | | order:2 columns:2 advanced:true placeholder:\"e.g. 1Gi, 2Gi\"" }
-      oidcClientSecretRef: { type: string, title: "Authentication | OIDC client secret | | order:2 advanced:true", description: "Secret with keys client_id/client_secret, this instance's own OAuth client. Defaults to creds-<release>-oauth2." }
+      schedulerMemoryGi: { type: number, default: 1, multipleOf: 0.25, title: "Sizing | Scheduler memory (GiB) | | order:1 columns:2 advanced:true" }
+      webserverMemoryGi: { type: number, default: 1, multipleOf: 0.25, title: "Sizing | Webserver memory (GiB) | | order:2 columns:2 advanced:true" }
       oidcRoleMapping: { type: object, properties: {}, additionalProperties: true, title: "Authentication | Role mapping | | order:4 advanced:true", description: "Map of OIDC groups to lists of Airflow roles." }
       dagsGitSync: { type: object, properties: {}, additionalProperties: true, title: "DAGs | Git sync | | order:1", description: "Chart dags.gitSync values, credentialsSecret.name carries the git credentials Secret name." }
 
@@ -75,7 +74,7 @@ modules:
       {{- $airflowOidcEnabled := true }}
       {{- if hasKey .Context.oidc "enabled" }}{{- $airflowOidcEnabled = .Context.oidc.enabled }}{{ end }}
       {{- $airflowOidcScope := printf "%s offline_access" (.Context.oidc.scope | default "openid profile email groups") | replace " " "+" }}
-      {{- $airflowOauthSecret := .Parameters.oidcClientSecretRef | default (printf "creds-%s-oauth2" .Release.metadata.name) }}
+      {{- $airflowOauthSecret := printf "creds-%s-oauth2" .Release.metadata.name }}
       {{- $airflowOidcRoleMapping := .Parameters.oidcRoleMapping | default dict }}
       {{- $airflowOidcBaseUrl := "" }}
       {{- $airflowOidcAuthUrl := "" }}
@@ -127,7 +126,7 @@ modules:
             memory: "384Mi"
             cpu: "200m"
           limits:
-            memory: "{{ .Parameters.webserverMemory }}"
+            memory: "{{ .Parameters.webserverMemoryGi }}Gi"
             cpu: "1000m"
         startupProbe:
           failureThreshold: 24
@@ -189,7 +188,7 @@ modules:
             memory: "384Mi"
             cpu: "200m"
           limits:
-            memory: "{{ .Parameters.schedulerMemory }}"
+            memory: "{{ .Parameters.schedulerMemoryGi }}Gi"
             cpu: "1000m"
         startupProbe:
           failureThreshold: 12
