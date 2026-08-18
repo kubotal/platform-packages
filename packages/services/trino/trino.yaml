@@ -21,7 +21,7 @@ name: trino
 #tag: 480-p01
 # Currently, the UI requires the version to conform to SemVer (https://simversion.github.io/)
 # https://github.com/OKDP/okdp-ui/blob/main/src/app/shared/utils/utils.ts#L131
-tag: 480.0.0-p13
+tag: 480.0.0-p14
 protected: false
 description: |
   Apache Trino - Distributed SQL query engine designed for large-scale data processing across multiple data sources.
@@ -37,9 +37,8 @@ schema:
       metastore: { title: "Catalogs | Hive metastore | | order:1", type: connectionRef, contract: hive, required: true, description: "Hive metastore connection backing the hive catalog." }
       storage: { title: "Catalogs | Object store | | order:2", type: connectionRef, contract: s3, required: true, description: "S3 object store connection backing the hive catalog." }
       s3SecretRef: { title: "Catalogs | S3 credentials secret | | order:3", type: string, required: true, description: "This instance's own S3 identity. Secret with keys: accessKey, secretKey." }
-      oidcClientSecretRef: { title: "Authentication | OIDC client secret | | order:1", type: string, required: true, description: "OAuth client of this instance. Secret with keys: client_id, client_secret. Ignored when enableDCR is true." }
+      oidcClientSecretRef: { title: "Authentication | OIDC client secret | | order:1 advanced:true", type: string, description: "OAuth client of this instance. Secret with keys: client_id, client_secret. Defaults to creds-<release>-oauth2. Ignored when enableDCR is true." }
       sharedSecretRef: { title: "Authentication | Internal shared secret | | order:3", type: string, required: true, description: "Trino internal communication shared secret. Secret with key: shared-secret." }
-      oidcScope: { title: "Authentication | Scopes | | order:2 advanced:true", type: string, default: "openid profile email groups", description: "Scopes requested on the OAuth2 login flow." }
       hiveCatalog: { title: "Catalogs | Hive catalog name | | order:4 columns:2", type: string, default: hive, description: "Name of the hive catalog." }
       icebergCatalogs:
         title: "Catalogs | Iceberg REST catalogs | | order:5"
@@ -50,7 +49,7 @@ schema:
             name: { type: string, required: true, description: "Trino catalog name." }
             catalog: { type: connectionRef, contract: iceberg-catalog, required: true, description: "Iceberg REST catalog connection." }
             warehouse: { type: string, description: "Polaris catalog used as the warehouse. Defaults to the realm published on the connection." }
-            oidcSecretRef: { type: string, required: true, description: "OAuth client Trino uses against this catalog. Secret with keys: client_id, client_secret." }
+            oidcSecretRef: { type: string, description: "OAuth client Trino uses against this catalog. Secret with keys: client_id, client_secret. Defaults to creds-<release>-oauth2." }
             oauth2Scope: { type: string, default: "PRINCIPAL_ROLE:ALL", description: "OAuth2 scope requested. Polaris rejects the connector default." }
       allowAuthOverHttp: { title: "Authentication | Allow auth over HTTP | | order:7 advanced:true", type: boolean, default: false, description: "Accept authenticated calls over plain HTTP. Needed by in-cluster clients that reach the coordinator service directly, such as Superset." }
       numWorkers: { type: integer, default: 1, title: "Cluster | Workers | stepper | order:1 columns:2", description: "Number of workers" }
@@ -87,6 +86,7 @@ schema:
           authUrl: { type: string, required: true }
           tokenUrl: { type: string, required: true }
           jwksUri: { type: string, required: true }
+          scope: { type: string, default: "openid profile email groups" }
 
 modules:
   - name: opa
@@ -249,7 +249,8 @@ modules:
       {{- $oidcTokenUrl := .Context.oidc.tokenUrl -}}
       {{- $oidcJwksUrl := .Context.oidc.jwksUri -}}
 
-      {{- $oidcScopes := .Parameters.oidcScope | replace " " "," -}}
+      {{- $oidcScopes := (.Context.oidc.scope | default "openid profile email groups") | replace " " "," -}}
+      {{- $oauthSecret := .Parameters.oidcClientSecretRef | default (printf "creds-%s-oauth2" $release) -}}
 
       {{- $trinoEndpoint := printf "trino-%s.%s" $namespace $domain -}}
 
@@ -295,7 +296,7 @@ modules:
               name: {{ $release }}-{{ $namespace }}-dcr
               key: OIDC_CLIENT_ID
               {{- else }}
-              name: {{ .Parameters.oidcClientSecretRef }}
+              name: {{ $oauthSecret }}
               key: client_id
               {{- end }}
 
@@ -306,7 +307,7 @@ modules:
               name: {{ $release }}-{{ $namespace }}-dcr
               key: OIDC_CLIENT_SECRET
               {{- else }}
-              name: {{ .Parameters.oidcClientSecretRef }}
+              name: {{ $oauthSecret }}
               key: client_secret
               {{- end }}
 
@@ -315,12 +316,12 @@ modules:
         - name: ICEBERG_OAUTH_CLIENT_ID_{{ $envPrefix }}
           valueFrom:
             secretKeyRef:
-              name: {{ $ic.oidcSecretRef }}
+              name: {{ $ic.oidcSecretRef | default $oauthSecret }}
               key: client_id
         - name: ICEBERG_OAUTH_CLIENT_SECRET_{{ $envPrefix }}
           valueFrom:
             secretKeyRef:
-              name: {{ $ic.oidcSecretRef }}
+              name: {{ $ic.oidcSecretRef | default $oauthSecret }}
               key: client_secret
         # Kubernetes expands $(VAR) from variables declared earlier in this list.
         - name: ICEBERG_OAUTH_{{ $envPrefix }}

@@ -18,7 +18,7 @@
 # iceberg-catalog Connection (output catalog).
 apiVersion: v1alpha1
 name: polaris
-tag: 1.3.0-incubating-cnx05
+tag: 1.3.0-incubating-cnx06
 protected: false
 description: |
   Apache Polaris is an open-source, fully-featured catalog for Apache Iceberg™.
@@ -34,7 +34,7 @@ schema:
       db: { title: "Catalog | Metadata database | | order:1", type: connectionRef, contract: database-server, required: true, description: "Connection to the PostgreSQL server hosting the Polaris metastore database." }
       storage: { title: "Storage | Object store | | order:1", type: connectionRef, contract: s3, required: true, description: "Connection to the S3-compatible object store backing the catalogs." }
       s3SecretRef: { title: "Storage | S3 credentials secret | | order:2", type: string, required: true, description: "Secret with keys accessKey/secretKey, this consumer's own S3 identity (STS and catalog-side Iceberg metadata operations)." }
-      oidcClientSecretRef: { title: "Catalog | OIDC client secret | | order:2", type: string, required: true, description: "Secret with keys client_id/client_secret, the OAuth client of this Polaris instance." }
+      oidcClientSecretRef: { title: "Catalog | OIDC client secret | | order:2 advanced:true", type: string, description: "Secret with keys client_id/client_secret, the OAuth client of this Polaris instance. Defaults to creds-<release>-oauth2." }
       realms:
         title: "Catalog | Realms | | order:3"
         type: array
@@ -45,17 +45,13 @@ schema:
             name: { type: string, required: true }
           additionalProperties: true
       defaultRealm: { title: "Catalog | Default realm | | order:4 columns:2", type: string, required: true, description: "Realm published on the catalog Connection and preselected in the console." }
-      console:
-        title: "Catalog | Web console | | order:5 advanced:true"
-        properties:
-          oidcClientId: { type: string, default: polaris-console, description: "Public OIDC client (PKCE) used by the console." }
-          oidcScope: { type: string, default: "openid profile email roles offline_access", description: "OIDC scope requested by the console." }
   context:
     properties:
       oidc:
         required: true
         properties:
           issuerUri: { type: string, required: true }
+          scope: { type: string, default: "openid profile email groups" }
       certificateIssuers:
         required: true
         properties:
@@ -172,7 +168,7 @@ modules:
         - name: QUARKUS_OIDC_CLIENT_ID
           valueFrom:
             secretKeyRef:
-              name: {{ .Parameters.oidcClientSecretRef }}
+              name: {{ .Parameters.oidcClientSecretRef | default (printf "creds-%s-oauth2" .Release.metadata.name) }}
               key: client_id
         # Trust The CA
         - name: JAVA_TOOL_OPTIONS
@@ -214,7 +210,7 @@ modules:
         client:
           id: ~
           secret:
-            name: {{ .Parameters.oidcClientSecretRef }}
+            name: {{ .Parameters.oidcClientSecretRef | default (printf "creds-%s-oauth2" .Release.metadata.name) }}
             key: client_secret
 
         # Map polaris internal principal and roles with OIDC principal and roles
@@ -364,9 +360,9 @@ modules:
 
       extraEnv:
         VITE_OIDC_ISSUER_URL: "{{ $oidcIssuerUri }}"
-        VITE_OIDC_CLIENT_ID: "{{ .Parameters.console.oidcClientId }}"
+        VITE_OIDC_CLIENT_ID: "polaris-console"
         VITE_OIDC_REDIRECT_URI: "{{ $polarisEndpointConsoleUrl }}/auth/callback"
-        VITE_OIDC_SCOPE: "{{ .Parameters.console.oidcScope }}"
+        VITE_OIDC_SCOPE: "{{ .Context.oidc.scope | default "openid profile email groups" }} roles offline_access"
 
       ingress:
         enabled: true

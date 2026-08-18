@@ -19,7 +19,7 @@
 
 apiVersion: v1alpha1
 name: superset
-tag: 6.0.0-cnx08
+tag: 6.0.0-cnx09
 protected: false
 description: |
   Apache Superset - Enterprise business intelligence platform for modern data teams.
@@ -44,23 +44,15 @@ schema:
       # Secret Key for Superset's Flask App. Secret with key: superset_secret_key
       secretKeyRef: { title: "Cluster | Flask secret key | | order:4", type: string, required: true }
       # External redis. Host defaults to the redis bundled by the chart
-      redisHost: { title: "Cluster | Redis host | | order:5 columns:2 advanced:true", type: string }
-      redisPort: { title: "Cluster | Redis port | | order:6 columns:2 advanced:true", type: integer, default: 6379 }
       # Secret with keys: username, password
       redisSecretRef: { title: "Cluster | Redis credentials secret | | order:7", type: string, required: true }
       # OAuth client of THIS instance. The provider comes from the platform context
-      oidcEnabled: { title: "Authentication | Enable OIDC | | order:1", type: boolean, default: true }
-      oidcProvider: { title: "Authentication | Provider display name | | order:2 condition:oidcEnabled=true", type: string, default: keycloak, description: "Provider display name" }
-      oidcScope: { title: "Authentication | Scopes | | order:4 advanced:true condition:oidcEnabled=true", type: string, default: "openid profile email groups" }
-      oidcUsePKCE: { title: "Authentication | Use PKCE | | order:5 advanced:true condition:oidcEnabled=true", type: boolean, default: true }
       # Secret with keys: client_id, client_secret
-      oidcClientSecretRef: { title: "Authentication | OIDC client secret | | order:3 condition:oidcEnabled=true", type: string, required: true }
+      oidcClientSecretRef: { title: "Authentication | OIDC client secret | | order:1 advanced:true", type: string, description: "OAuth client of this instance. Secret with keys: client_id, client_secret. Defaults to creds-<release>-oauth2." }
       # Map of OIDC roles to lists of superset roles
-      oidcRoleMapping: { title: "Authentication | Role mapping | | order:6 advanced:true condition:oidcEnabled=true", type: object, properties: {}, additionalProperties: true }
-      trinoOidcEnabled: { title: "Datasources | Trino OIDC | | order:2", type: boolean, default: true }
-      trinoOidcScope: { title: "Datasources | Trino scopes | | order:4 advanced:true condition:trinoOidcEnabled=true", type: string, default: "openid profile email groups" }
+      oidcRoleMapping: { title: "Authentication | Role mapping | | order:6 advanced:true", type: object, properties: {}, additionalProperties: true }
       # Secret with keys: client_id, client_secret
-      trinoOidcClientSecretRef: { title: "Datasources | Trino OAuth client secret | | order:3 condition:trinoOidcEnabled=true", type: string, required: true }
+      trinoOidcClientSecretRef: { title: "Datasources | Trino OAuth client secret | | order:3 advanced:true", type: string, description: "OAuth client used against Trino from SQL Lab. Secret with keys: client_id, client_secret. Defaults to creds-<release>-oauth2-trino." }
       # Datasources: one list, each element wires its own trino connection and
       # its catalog. The name is the display name in the Superset UI
       datasources:
@@ -77,6 +69,10 @@ schema:
         required: true
         properties:
           issuerUri: { type: string, required: true }
+          enabled: { type: boolean, default: true }
+          displayName: { type: string, default: keycloak }
+          scope: { type: string, default: "openid profile email groups" }
+          usePKCE: { type: boolean, default: true }
       certificateIssuers:
         required: true
         properties:
@@ -98,6 +94,14 @@ modules:
 
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
+      {{- $oidcEnabled := true -}}
+      {{- if hasKey .Context.oidc "enabled" }}{{- $oidcEnabled = .Context.oidc.enabled -}}{{ end -}}
+      {{- $oidcUsePKCE := true -}}
+      {{- if hasKey .Context.oidc "usePKCE" }}{{- $oidcUsePKCE = .Context.oidc.usePKCE -}}{{ end -}}
+      {{- $oidcScope := .Context.oidc.scope | default "openid profile email groups" -}}
+      {{- $oidcDisplayName := .Context.oidc.displayName | default "keycloak" -}}
+      {{- $oauthSecret := .Parameters.oidcClientSecretRef | default (printf "creds-%s-oauth2" $release) -}}
+      {{- $trinoOauthSecret := .Parameters.trinoOidcClientSecretRef | default (printf "creds-%s-oauth2-trino" $release) -}}
       {{- $domain := printf "%v" .Context.ingress.suffix -}}
 
       {{- /* The examples loader is postgresql specific (psycopg2 dialect, main search_path) */ -}}
@@ -143,11 +147,11 @@ modules:
 
         # Oauth2 configuration
         oauth:
-          enabled: {{ .Parameters.oidcEnabled }}
-          provider: "{{ .Parameters.oidcProvider }}"
+          enabled: {{ $oidcEnabled }}
+          provider: "{{ $oidcDisplayName }}"
           base_url: {{ $oidcBaseUrl }}
-          scope: "{{ .Parameters.oidcScope }}"
-          use_pkce: {{ .Parameters.oidcUsePKCE }}
+          scope: "{{ $oidcScope }}"
+          use_pkce: {{ $oidcUsePKCE }}
           auth_registration: &auth_registration |
             AUTH_USER_REGISTRATION = True
             AUTH_ROLE_PUBLIC = "Public"
@@ -162,9 +166,9 @@ modules:
 
         trino:
           oauth:
-            enabled: {{ .Parameters.trinoOidcEnabled }}
+            enabled: {{ $oidcEnabled }}
             base_url: {{ $oidcBaseUrl }}
-            scope: "{{ .Parameters.trinoOidcScope }}"
+            scope: "{{ $oidcScope }}"
 
       superset:
         image:
@@ -230,28 +234,30 @@ modules:
               secretKeyRef:
                 name: {{ .Parameters.redisSecretRef }}
                 key: password
+          {{- if $oidcEnabled }}
           # OIDC credentials
           - name: AUTH_OAUTH_CLIENT_ID
             valueFrom:
               secretKeyRef:
-                name: {{ .Parameters.oidcClientSecretRef }}
+                name: {{ $oauthSecret }}
                 key: client_id
           - name: AUTH_OAUTH_CLIENT_SECRET
             valueFrom:
               secretKeyRef:
-                name: {{ .Parameters.oidcClientSecretRef }}
+                name: {{ $oauthSecret }}
                 key: client_secret
           # OIDC Trino credentials
           - name: TRINO_OAUTH_CLIENT_ID
             valueFrom:
               secretKeyRef:
-                name: {{ .Parameters.trinoOidcClientSecretRef }}
+                name: {{ $trinoOauthSecret }}
                 key: client_id
           - name: TRINO_OAUTH_CLIENT_SECRET
             valueFrom:
               secretKeyRef:
-                name: {{ .Parameters.trinoOidcClientSecretRef }}
+                name: {{ $trinoOauthSecret }}
                 key: client_secret
+          {{- end }}
           # CA
           - name: REQUESTS_CA_BUNDLE
             value: /cacerts/ca.crt
@@ -351,8 +357,8 @@ modules:
             db_user: ~
             db_pass: ~
             # -- Redis
-            redis_host: {{ default (printf "%s-main-redis-headless" $release) .Parameters.redisHost | quote }}
-            redis_port: {{ .Parameters.redisPort }}
+            redis_host: {{ printf "%s-main-redis-headless" $release | quote }}
+            redis_port: 6379
             redis_user: ~
             redis_password: ~
             redis_cache_db: "1"
