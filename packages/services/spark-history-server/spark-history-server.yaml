@@ -18,7 +18,7 @@
 # name this instance's own identities.
 apiVersion: v1alpha1
 name: spark-history-server
-tag: 3.5.1-cnx08
+tag: 3.5.1-cnx09
 protected: false
 description: |
   Spark History Server - Monitoring and debugging interface for Apache Spark applications.
@@ -96,11 +96,7 @@ modules:
 
       {{- $webProxyEndpointUrl := printf "https://%s-%s.%s" "spark-web-proxy" $namespace $domain -}}
 
-      {{- $historyRedirectUri := $historyEndpointUrl -}}
-
-      {{- if true }}
       {{- $historyRedirectUri := $webProxyEndpointUrl -}}
-      {{- end }}
       {{- $sparkHistoryExtraConfig := (.Parameters.config | default dict) -}}
       {{- if not (kindIs "map" $sparkHistoryExtraConfig) }}
         {{- fail "parameters.config must be a map" -}}
@@ -135,9 +131,14 @@ modules:
               - {{ $historyEndpointHost }}
             secretName: {{ .Release.metadata.name }}-tls
 
+      # The web proxy addresses the history server as <release>-main, so the chart
+      # must not append its own name to it.
+      fullnameOverride: {{ .Release.metadata.name }}-main
+
       config:
         spark.hadoop.fs.s3a.endpoint: {{ $storageApiUrl }}
         spark.hadoop.fs.s3a.path.style.access: {{ .Parameters.storage.pathStyle | default false }}
+        spark.ui.filters: io.okdp.spark.authc.OidcAuthFilter
         spark.io.okdp.spark.authc.OidcAuthFilter.param.issuer-uri: {{ $oidcIssuerUri }}
         spark.io.okdp.spark.authc.OidcAuthFilter.param.redirect-uri: {{ $historyRedirectUri }}/home
         spark.io.okdp.spark.authc.OidcAuthFilter.param.scope: {{ printf "%s offline_access" (.Context.oidc.scope | default "openid profile email groups") | replace " " "+" }}

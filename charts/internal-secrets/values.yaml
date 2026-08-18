@@ -1,0 +1,11 @@
+# The secrets to generate. Each entry becomes one StringSecret, and the
+# generator fills the fields it does not already find. An existing Secret is
+# left untouched, so a value put in place by hand survives.
+#
+# secrets:
+#   - name: creds-myrelease-internal
+#     fields:
+#       - fieldName: shared-secret
+#         encoding: base64
+#         length: "32"
+secrets: []

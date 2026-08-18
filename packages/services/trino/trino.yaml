@@ -21,7 +21,7 @@ name: trino
 #tag: 480-p01
 # Currently, the UI requires the version to conform to SemVer (https://simversion.github.io/)
 # https://github.com/OKDP/okdp-ui/blob/main/src/app/shared/utils/utils.ts#L131
-tag: 480.0.0-p15
+tag: 480.0.0-p16
 protected: false
 description: |
   Apache Trino - Distributed SQL query engine designed for large-scale data processing across multiple data sources.
@@ -37,7 +37,6 @@ schema:
       metastore: { title: "Catalogs | Hive metastore | | order:1", type: connectionRef, contract: hive, required: true, description: "Hive metastore connection backing the hive catalog." }
       storage: { title: "Catalogs | Object store | | order:2", type: connectionRef, contract: s3, required: true, description: "S3 object store connection backing the hive catalog." }
       s3SecretRef: { title: "Catalogs | S3 credentials secret | | order:3", type: string, required: true, description: "This instance's own S3 identity. Secret with keys: accessKey, secretKey." }
-      sharedSecretRef: { title: "Authentication | Internal shared secret | | order:3", type: string, required: true, description: "Trino internal communication shared secret. Secret with key: shared-secret." }
       hiveCatalog: { title: "Catalogs | Hive catalog name | | order:4 columns:2", type: string, default: hive, description: "Name of the hive catalog." }
       icebergCatalogs:
         title: "Catalogs | Iceberg REST catalogs | | order:5"
@@ -85,6 +84,17 @@ schema:
           scope: { type: string, default: "openid profile email groups" }
 
 modules:
+  - name: internal-secrets
+    source:
+      local:
+        path: ../../../charts/internal-secrets
+    values: |
+      secrets:
+        - name: "creds-{{ .Release.metadata.name }}-internal"
+          fields:
+            - fieldName: shared-secret
+              encoding: base64
+              length: "32"
   - name: opa
     enabled: "{{ .Parameters.enableOPA }}"
     timeout: 10m
@@ -328,7 +338,7 @@ modules:
         - name: TRINO_SHARED_SECRET
           valueFrom:
             secretKeyRef:
-              name: {{ .Parameters.sharedSecretRef }}
+              name: {{ printf "creds-%s-internal" .Release.metadata.name }}
               key: shared-secret
 
         - name: TRUSTSTORE_PASSWORD

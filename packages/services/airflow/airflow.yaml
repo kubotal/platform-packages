@@ -2,7 +2,7 @@
 # the connection string from the Secret named by metadataSecret.
 apiVersion: v1alpha1
 name: airflow
-tag: 3.2.1-cnx07
+tag: 3.2.1-cnx08
 protected: false
 description: |
   Apache Airflow 2.9.3 - Workflow orchestration platform with Spark Operator integration
@@ -42,7 +42,6 @@ schema:
     properties:
       db: { type: connectionRef, contract: database-server, required: true, title: "Cluster | Metadata database | | order:2", description: "Connection to the SQL database server hosting the Airflow metadata database." }
       metadataSecret: { type: string, required: true, title: "Cluster | Metadata connection secret | | order:3", description: "Secret with key connection holding the full SQLAlchemy connection string." }
-      securitySecretRef: { type: string, required: true, title: "Cluster | Security secret | | order:4", description: "Secret holding the api secret key, JWT secret and fernet key." }
       # CeleryExecutor is left out: it needs a broker and workers, and this package
       # pins workers.replicas to 0 with no Redis.
       executor: { type: string, default: "KubernetesExecutor", enum: ["KubernetesExecutor", "LocalExecutor"], title: "Cluster | Executor | | order:1" }
@@ -52,6 +51,20 @@ schema:
       dagsGitSync: { type: object, properties: {}, additionalProperties: true, title: "DAGs | Git sync | | order:1", description: "Chart dags.gitSync values, credentialsSecret.name carries the git credentials Secret name." }
 
 modules:
+  - name: internal-secrets
+    source:
+      local:
+        path: ../../../charts/internal-secrets
+    values: |
+      secrets:
+        - name: "creds-{{ .Release.metadata.name }}-internal"
+          fields:
+            - fieldName: api-secret-key
+              encoding: base64
+              length: "32"
+            - fieldName: jwt-secret
+              encoding: base64
+              length: "64"
   - name: main
     timeout: 15m
     source:
@@ -305,9 +318,10 @@ modules:
           cookie_secure: "True"
           cookie_samesite: "Lax"
 
-      apiSecretKeySecretName: {{ .Parameters.securitySecretRef }}
-      jwtSecretName: {{ .Parameters.securitySecretRef }}
-      fernetKeySecretName: {{ .Parameters.securitySecretRef }}
+      # The fernet key is left to the chart: it mints it in a pre-install hook,
+      # so it is not rotated on upgrades. The generator cannot produce its format.
+      apiSecretKeySecretName: {{ printf "creds-%s-internal" .Release.metadata.name }}
+      jwtSecretName: {{ printf "creds-%s-internal" .Release.metadata.name }}
 
 roles:
   - airflow
