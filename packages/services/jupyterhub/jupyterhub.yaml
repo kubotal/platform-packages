@@ -19,7 +19,7 @@
 
 apiVersion: v1alpha1
 name: jupyterhub
-tag: 4.3.3-cnx10
+tag: 4.3.3-cnx11
 protected: false
 description: |
   JupyterHub - Multi-user interactive development environment for data science and machine learning.
@@ -34,14 +34,6 @@ schema:
     properties:
       memoryGi: { type: number, default: 1, multipleOf: 0.25, title: "Notebooks | Memory (GiB) | | order:2 columns:2", description: "Notebook (singleuser) pod memory (GiB) for requests/limits." }
       cpu:      { type: number, default: 0.5, multipleOf: 0.25, title: "Notebooks | CPU (vCPU) | | order:1 columns:2", description: "Notebook (singleuser) pod CPU (vCPU) for requests/limits." }
-      hubCpuRequest: { type: number, default: 0.1, title: "Sizing | Hub CPU request (vCPU) | | order:3 columns:2 advanced:true" }
-      hubCpuLimit: { type: number, default: 1, title: "Sizing | Hub CPU limit (vCPU) | | order:4 columns:2 advanced:true" }
-      hubMemoryRequest: { type: number, default: 0.5, title: "Sizing | Hub memory request (GiB) | | order:5 columns:2 advanced:true" }
-      hubMemoryLimit: { type: number, default: 1, title: "Sizing | Hub memory limit (GiB) | | order:6 columns:2 advanced:true" }
-      proxyCpuRequest: { type: number, default: 0.1, title: "Sizing | Proxy CPU request (vCPU) | | order:7 columns:2 advanced:true" }
-      proxyCpuLimit: { type: number, default: 1, title: "Sizing | Proxy CPU limit (vCPU) | | order:8 columns:2 advanced:true" }
-      proxyMemoryRequest: { type: number, default: 0.125, title: "Sizing | Proxy memory request (GiB) | | order:9 columns:2 advanced:true" }
-      proxyMemoryLimit: { type: number, default: 0.5, title: "Sizing | Proxy memory limit (GiB) | | order:10 columns:2 advanced:true" }
       # The S3 store backing the jupyter-fs file browser.
       storage: { type: connectionRef, contract: s3, required: true, title: "Storage | Object store | | order:1" }
       # This consumer's own S3 identity. Secret with keys: accessKey, secretKey.
@@ -78,17 +70,6 @@ schema:
         type: array
         title: "Spark | Enabled connections | | order:1"
         items: { type: string }
-      sparkRbac:
-        title: "Spark | RBAC | | order:3 advanced:true"
-        properties:
-          rbac:
-            properties:
-              create: { type: boolean, default: true }
-          serviceAccount:
-            properties:
-              create: { type: boolean, default: true }
-              name: { type: string, default: "spark" }
-              automountServiceAccountToken: { type: boolean, default: true }
       sparkDefaults:
         title: "Spark | Conf defaults | | order:4 advanced:true"
         type: object
@@ -151,11 +132,11 @@ modules:
         tag: 1.0.1
     values: |
       rbac:
-        create: {{ .Parameters.sparkRbac.rbac.create }}
+        create: true
       serviceAccount:
-        create: {{ .Parameters.sparkRbac.serviceAccount.create }}
-        name: "{{ .Parameters.sparkRbac.serviceAccount.name }}"
-        automountServiceAccountToken: {{ .Parameters.sparkRbac.serviceAccount.automountServiceAccountToken }}
+        create: true
+        name: "spark"
+        automountServiceAccountToken: true
 
   - name: main
     dependsOn:
@@ -228,11 +209,11 @@ modules:
       hub:
         resources:
           requests:
-            cpu: "{{ .Parameters.hubCpuRequest }}"
-            memory: "{{ .Parameters.hubMemoryRequest }}Gi"
+            cpu: "0.1"
+            memory: "0.5Gi"
           limits:
-            cpu: "{{ .Parameters.hubCpuLimit }}"
-            memory: "{{ .Parameters.hubMemoryLimit }}Gi"
+            cpu: "1"
+            memory: "1Gi"
         extraEnv:
           OAUTH_CLIENT_ID:
             valueFrom:
@@ -318,11 +299,11 @@ modules:
         chp:
           resources:
             requests:
-              cpu: "{{ .Parameters.proxyCpuRequest }}"
-              memory: "{{ .Parameters.proxyMemoryRequest }}Gi"
+              cpu: "0.1"
+              memory: "0.125Gi"
             limits:
-              cpu: "{{ .Parameters.proxyCpuLimit }}"
-              memory: "{{ .Parameters.proxyMemoryLimit }}Gi"
+              cpu: "1"
+              memory: "0.5Gi"
 
       ingress:
         enabled: true
@@ -574,7 +555,7 @@ modules:
                     | replace "{{ .Context.ingress.suffix }}" $domain
                     | replace "NAMESPACE" $namespace) | quote }}
                   {{- end }}
-                  --conf spark.kubernetes.authenticate.serviceAccountName={{ .Parameters.sparkRbac.serviceAccount.name }}
+                  --conf spark.kubernetes.authenticate.serviceAccountName=spark
                   {{- range $connectionName := $jupyterPySparkConnections }}
                   {{- $connection := index $jupyterConnectionsByName $connectionName -}}
                   {{- if $connection }}
@@ -626,7 +607,7 @@ modules:
                       environment:
                         SPARK_EXECUTOR_IMAGE: quay.io/okdp/spark-py:spark-3.5.6-python-3.11-scala-2.12-java-17
 
-        serviceAccountName: {{ .Parameters.sparkRbac.serviceAccount.name }}
+        serviceAccountName: spark
         storage:
           homeMountPath: "/home/{username}"
           dynamic:

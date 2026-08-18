@@ -18,7 +18,7 @@
 # name this instance's own identities.
 apiVersion: v1alpha1
 name: spark-history-server
-tag: 3.5.1-cnx09
+tag: 3.5.1-cnx10
 protected: false
 description: |
   Spark History Server - Monitoring and debugging interface for Apache Spark applications.
@@ -43,12 +43,6 @@ schema:
           history_admin_groups: { type: array, items: { type: string } }
           modify_groups: { type: array, items: { type: string } }
           view_groups: { type: array, items: { type: string } }
-      config:
-        title: "Cluster | Extra Spark config | | order:3 advanced:true"
-        type: object
-        additionalProperties: true
-        properties: {}
-        description: "Spark History Server configuration entries merged as-is (e.g. spark.history.fs.logDirectory, cleaner, s3a and ui filter settings)."
   context:
     properties:
       certificateIssuers:
@@ -97,10 +91,6 @@ modules:
       {{- $webProxyEndpointUrl := printf "https://%s-%s.%s" "spark-web-proxy" $namespace $domain -}}
 
       {{- $historyRedirectUri := $webProxyEndpointUrl -}}
-      {{- $sparkHistoryExtraConfig := (.Parameters.config | default dict) -}}
-      {{- if not (kindIs "map" $sparkHistoryExtraConfig) }}
-        {{- fail "parameters.config must be a map" -}}
-      {{- end }}
 
       image:
         repository: quay.io/okdp/spark
@@ -136,6 +126,7 @@ modules:
       fullnameOverride: {{ .Release.metadata.name }}-main
 
       config:
+        spark.history.fs.logDirectory: s3a://spark-events/event-logs
         spark.hadoop.fs.s3a.endpoint: {{ $storageApiUrl }}
         spark.hadoop.fs.s3a.path.style.access: {{ .Parameters.storage.pathStyle | default false }}
         spark.ui.filters: io.okdp.spark.authc.OidcAuthFilter
@@ -162,9 +153,7 @@ modules:
         # spark.ui.view.acls.groups
         spark.ui.view.acls.groups: {{ $viewGroups | join "," | quote }}
       {{- end }}
-      {{- range $key := (keys $sparkHistoryExtraConfig | sortAlpha) }}
-        {{ $key }}: {{ index $sparkHistoryExtraConfig $key }}
-      {{- end }}
+
       extraEnvs:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:

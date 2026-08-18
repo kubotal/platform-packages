@@ -21,7 +21,7 @@ name: trino
 #tag: 480-p01
 # Currently, the UI requires the version to conform to SemVer (https://simversion.github.io/)
 # https://github.com/OKDP/okdp-ui/blob/main/src/app/shared/utils/utils.ts#L131
-tag: 480.0.0-p16
+tag: 480.0.0-p17
 protected: false
 description: |
   Apache Trino - Distributed SQL query engine designed for large-scale data processing across multiple data sources.
@@ -49,7 +49,6 @@ schema:
             warehouse: { type: string, description: "Polaris catalog used as the warehouse. Defaults to the realm published on the connection." }
             oidcSecretRef: { type: string, description: "OAuth client Trino uses against this catalog. Secret with keys: client_id, client_secret. Defaults to creds-<release>-oauth2." }
             oauth2Scope: { type: string, default: "PRINCIPAL_ROLE:ALL", description: "OAuth2 scope requested. Polaris rejects the connector default." }
-      allowAuthOverHttp: { title: "Authentication | Allow auth over HTTP | | order:7 advanced:true", type: boolean, default: false, description: "Accept authenticated calls over plain HTTP. Needed by in-cluster clients that reach the coordinator service directly, such as Superset." }
       numWorkers: { type: integer, default: 1, title: "Sizing | Workers | stepper | order:1 columns:2 advanced:true", description: "Number of workers" }
       workerCpu: { type: number, default: 0.5, multipleOf: 0.25, title: "Sizing | Worker CPU (vCPU) | | order:2 columns:2 advanced:true", description: "Worker CPU request in vCPU." }
       workerMemoryGi: { type: number, default: 2, multipleOf: 0.25, title: "Sizing | Worker memory (GiB) | | order:3 columns:2 advanced:true", description: "Worker memory (GiB) used for Kubernetes requests/limits (recommended: request=limit)." }
@@ -443,11 +442,9 @@ modules:
           # - JWT: non-interactive bearer token authentication for automation/service accounts
           #   such as scripts, jobs, or CI/CD using --access-token
           http-server.authentication.type=jwt,oauth2
-          {{- if .Parameters.allowAuthOverHttp }}
-          # In-cluster clients reach the coordinator on plain HTTP; without this
+          # In-cluster clients reach the coordinator on plain HTTP. Without this,
           # Trino answers 403 to any authenticated call that is not TLS.
           http-server.authentication.allow-insecure-over-http=true
-          {{- end }}
           http-server.authentication.oauth2.issuer={{ $oidcIssuerUri }}
           http-server.authentication.oauth2.client-id=${ENV:TRINO_OAUTH_CLIENT_ID}
           http-server.authentication.oauth2.client-secret=${ENV:TRINO_OAUTH_CLIENT_SECRET}

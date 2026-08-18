@@ -18,7 +18,7 @@
 # iceberg-catalog Connection (output catalog).
 apiVersion: v1alpha1
 name: polaris
-tag: 1.3.0-incubating-cnx07
+tag: 1.3.0-incubating-cnx08
 protected: false
 description: |
   Apache Polaris is an open-source, fully-featured catalog for Apache Iceberg™.
@@ -29,7 +29,6 @@ usage:
 schema:
   parameters:
     properties:
-      purge: { type: boolean, default: false, title: "Catalog | Purge realms | | order:3 advanced:true", description: "Whether to purge realms and all associated entities." }
       memoryGi: { type: number, default: 1, multipleOf: 0.25, title: "Sizing | Memory (GiB) | | order:1 columns:2 advanced:true" }
       db: { title: "Catalog | Metadata database | | order:1", type: connectionRef, contract: database-server, required: true, description: "Connection to the PostgreSQL server hosting the Polaris metastore database." }
       storage: { title: "Storage | Object store | | order:1", type: connectionRef, contract: s3, required: true, description: "Connection to the S3-compatible object store backing the catalogs." }
@@ -73,7 +72,7 @@ modules:
 
       bootstrap:
 
-        purge: {{ .Parameters.purge }}
+        purge: false
 
         image:
           repository: apache/polaris-admin-tool

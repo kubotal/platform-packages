@@ -2,7 +2,7 @@
 # the connection string from the Secret named by metadataSecret.
 apiVersion: v1alpha1
 name: airflow
-tag: 3.2.1-cnx08
+tag: 3.2.1-cnx09
 protected: false
 description: |
   Apache Airflow 2.9.3 - Workflow orchestration platform with Spark Operator integration
@@ -44,7 +44,6 @@ schema:
       metadataSecret: { type: string, required: true, title: "Cluster | Metadata connection secret | | order:3", description: "Secret with key connection holding the full SQLAlchemy connection string." }
       # CeleryExecutor is left out: it needs a broker and workers, and this package
       # pins workers.replicas to 0 with no Redis.
-      executor: { type: string, default: "KubernetesExecutor", enum: ["KubernetesExecutor", "LocalExecutor"], title: "Cluster | Executor | | order:1" }
       schedulerMemoryGi: { type: number, default: 1, multipleOf: 0.25, title: "Sizing | Scheduler memory (GiB) | | order:1 columns:2 advanced:true" }
       webserverMemoryGi: { type: number, default: 1, multipleOf: 0.25, title: "Sizing | Webserver memory (GiB) | | order:2 columns:2 advanced:true" }
       oidcRoleMapping: { type: object, properties: {}, additionalProperties: true, title: "Authentication | Role mapping | | order:4 advanced:true", description: "Map of OIDC groups to lists of Airflow roles." }
@@ -73,7 +72,7 @@ modules:
         chart: airflow
         version: 1.21.0
     values: |
-      executor: "{{ .Parameters.executor }}"
+      executor: "KubernetesExecutor"
 
       defaultAirflowTag: "3.2.1"
       airflowVersion: "3.2.1"
