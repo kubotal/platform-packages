@@ -56,9 +56,9 @@ schema:
           issuerUri: { type: string, required: true }
       proxy:
         properties:
-          httpProxy: { type: string }
-          httpsProxy: { type: string }
-          noProxy: { type: string }
+          httpProxy: { type: string, default: "" }
+          httpsProxy: { type: string, default: "" }
+          noProxy: { type: string, default: "" }
 modules:
   - name: main
     timeout: 10m
