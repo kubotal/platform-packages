@@ -19,7 +19,7 @@
 
 apiVersion: v1alpha1
 name: jupyterhub
-tag: 4.3.3-cnx11
+tag: 4.3.3-cnx12
 protected: false
 description: |
   JupyterHub - Multi-user interactive development environment for data science and machine learning.
@@ -68,7 +68,8 @@ schema:
             s3SecretRef: { type: string }
       pyspark:
         type: array
-        title: "Spark | Enabled connections | | order:1"
+        title: "Spark | Enabled connections | | order:1 advanced:true"
+        description: "Names of the connections below to wire into the PySpark kernel. Empty leaves the kernel without S3A or catalog settings."
         items: { type: string }
       sparkDefaults:
         title: "Spark | Conf defaults | | order:4 advanced:true"
