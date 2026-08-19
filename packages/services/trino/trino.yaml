@@ -21,7 +21,7 @@ name: trino
 #tag: 480-p01
 # Currently, the UI requires the version to conform to SemVer (https://simversion.github.io/)
 # https://github.com/OKDP/okdp-ui/blob/main/src/app/shared/utils/utils.ts#L131
-tag: 480.0.0-p17
+tag: 480.0.0-p18
 protected: false
 description: |
   Apache Trino - Distributed SQL query engine designed for large-scale data processing across multiple data sources.
@@ -477,7 +477,7 @@ outputs:
     contract: trino
     values:
       url: "https://trino-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}"
-      uri: "trino://trino@trino-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}"
+      uri: "trino://trino@trino-{{ .Release.spec.targetNamespace }}.{{ .Context.ingress.suffix }}:443"
       internalUri: "trino://trino@{{ .Release.metadata.name }}-main-trino.{{ .Release.spec.targetNamespace }}.svc.cluster.local:8080"
       catalogs:
         - tpch

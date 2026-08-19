@@ -19,7 +19,7 @@
 
 apiVersion: v1alpha1
 name: superset
-tag: 6.0.0-cnx12
+tag: 6.0.0-cnx13
 protected: false
 description: |
   Apache Superset - Enterprise business intelligence platform for modern data teams.
@@ -198,7 +198,23 @@ modules:
             databases:
             {{- range .Parameters.datasources }}
               - database_name: {{ .name }}
-                sqlalchemy_uri: "{{ .trino.internalUri }}/{{ .catalog }}"
+                sqlalchemy_uri: "{{ .trino.uri }}/{{ .catalog }}"
+                impersonate_user: true
+                extra: |
+                  {
+                    "engine_params": {},
+                    "metadata_params": {},
+                    "connect_args": {
+                      "http_scheme": "https",
+                      "verify": false
+                    },
+                    "metadata_cache_timeout": {},
+                    "schemas_allowed_for_file_upload": []
+                  }
+                allow_run_async: true
+                allow_dml: true
+                allow_ctas: true
+                allow_cvas: true
                 expose_in_sqllab: true
                 tables: []
             {{- end }}
