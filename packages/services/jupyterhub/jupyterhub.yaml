@@ -19,7 +19,7 @@
 
 apiVersion: v1alpha1
 name: jupyterhub
-tag: 4.3.3-cnx12
+tag: 4.3.3-cnx13
 protected: false
 description: |
   JupyterHub - Multi-user interactive development environment for data science and machine learning.
@@ -349,7 +349,10 @@ modules:
           GIT_SSL_NO_VERIFY: "false"
           # Ignore InsecureRequestWarning warnings
           PYTHONWARNINGS: "ignore:Unverified HTTPS request"
-          PYTHONPATH: "/etc/jupyter/auth"
+          # The Spark images ship pyspark under SPARK_HOME rather than in
+          # site-packages: overriding PYTHONPATH outright hides it, and the
+          # PySpark kernel then fails on "No module named pyspark".
+          PYTHONPATH: "/etc/jupyter/auth:/usr/local/spark/python:/usr/local/spark/python/lib/py4j-0.10.9.7-src.zip"
           AWS_CA_BUNDLE: /cacerts/ca.crt
           REQUESTS_CA_BUNDLE: /cacerts/ca.crt
           CURL_CA_BUNDLE: /cacerts/ca.crt
