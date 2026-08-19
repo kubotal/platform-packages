@@ -2,7 +2,7 @@
 # the connection string from the Secret named by metadataSecret.
 apiVersion: v1alpha1
 name: airflow
-tag: 3.2.1-cnx09
+tag: 3.2.1-cnx10
 protected: false
 description: |
   Apache Airflow 2.9.3 - Workflow orchestration platform with Spark Operator integration
@@ -132,6 +132,17 @@ modules:
         - name: CURL_CA_BUNDLE
           value: "/cacerts/ca.crt"
 
+      # The CA bundle the variables above point at, mounted in every Airflow
+      # container: a component without it fails any HTTPS call, and the CLI
+      # itself talks to the API server over HTTPS.
+      volumes:
+        - name: cacerts
+          secret:
+            secretName: certs-bundle
+      volumeMounts:
+        - name: cacerts
+          mountPath: /cacerts
+
       apiServer:
         resources:
           requests:
@@ -184,15 +195,6 @@ modules:
               },
           ]
         {{- end }}
-
-        extraVolumes:
-          - name: cacerts
-            secret:
-              secretName: certs-bundle
-
-        extraVolumeMounts:
-          - name: cacerts
-            mountPath: /cacerts
 
       scheduler:
         resources:
